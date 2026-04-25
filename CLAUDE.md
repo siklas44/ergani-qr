@@ -61,6 +61,9 @@ Multi-store, role-based (admin / manager / cashier).
 - Πριν μεγάλη αλλαγή: confirm με τον χρήστη
 - Το σύστημα κολλάει σε μεγάλα μηνύματα → κράτα τις απαντήσεις σύντομες
 
+## ⚡ Κανόνες χρήστη (ΥΠΟΧΡΕΩΤΙΚΟΙ)
+- **«ενημέρωσε τη μνήμη»** → ενημέρωσε ΑΜΕΣΩΣ `CLAUDE.md` + `STATE.md` με ό,τι νέο έχει συζητηθεί/αποφασιστεί/αλλάξει, και κάνε commit + push.
+
 ## User-side actions (απαιτούν χειρωνακτική ενέργεια)
 1. Firebase Console → Authentication → Sign-in method → Email/Password → Enable
 2. Firebase Console → Firestore → Rules → paste από `firestore.rules` → Publish
