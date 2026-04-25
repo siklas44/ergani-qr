@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helpers ──────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return signedIn() && userExists() && userRole() == 'admin';
+    }
+
+    // Bootstrap admin: μπορεί να δημιουργήσει το δικό του user doc
+    // ως admin κατά την πρώτη εγγραφή. Μετά μπαίνει στους κανόνες isAdmin().
+    function isBootstrapAdmin() {
+      return signedIn() && request.auth.token.email == 'siklas44@gmail.com';
+    }
+
+    // ─── /users/{uid} ─────────────────────────────────────────
+    match /users/{uid} {
+      // Διαβάζει: τον εαυτό του ή ο admin
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+      // Δημιουργία (signup):
+      //  - bootstrap admin (siklas44@gmail.com) → role=admin
+      //  - οποιοσδήποτε άλλος → role=null (αναμονή έγκρισης)
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && (
+          (isBootstrapAdmin() && request.resource.data.role == 'admin') ||
+          (!isBootstrapAdmin() && request.resource.data.role == null)
+        );
+
+      // Update / delete: μόνο admin
+      allow update, delete: if isAdmin();
+    }
+
+    // ─── /stores/{storeId} ────────────────────────────────────
+    match /stores/{storeId} {
+      allow read, write: if isAdmin();
+
+      // Employees subcollection
+      match /employees/{empId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // Όλα τα υπόλοιπα paths: deny by default (default Firestore behavior).
+    // Αυτό κλείνει αυτόματα και το παλιό /employees top-level collection.
+  }
+}
