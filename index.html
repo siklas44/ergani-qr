@@ -8,6 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -327,12 +328,170 @@
       pointer-events: none;
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Auth views ───────────────────────────────────────── */
+    .auth-screen {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 28px 24px;
+      box-shadow: var(--shadow);
+    }
+    .auth-card h1 {
+      font-size: 1.4rem;
+      margin-bottom: 4px;
+      color: var(--primary);
+    }
+    .auth-card .sub {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+    .auth-card .form-group { margin-bottom: 14px; }
+    .auth-card .btn { width: 100%; }
+    .auth-card .links {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 14px;
+      font-size: 0.85rem;
+    }
+    .auth-card .links a {
+      color: var(--primary);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .auth-card .links a:hover { text-decoration: underline; }
+    .auth-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .auth-error.show { display: block; }
+    .auth-info {
+      background: #dbeafe;
+      color: #1e40af;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+      display: none;
+    }
+    .auth-info.show { display: block; }
+
+    /* User badge in header */
+    .user-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 6px;
+      font-size: 0.8rem;
+      opacity: 0.95;
+    }
+    .user-badge .email {
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .logout-btn {
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+    }
+    .logout-btn:active { background: rgba(255,255,255,0.3); }
+
+    /* Pending state */
+    .pending-card { text-align: center; }
+    .pending-card .icon {
+      font-size: 2.5rem;
+      margin-bottom: 12px;
+    }
+    .pending-card h2 {
+      font-size: 1.15rem;
+      margin-bottom: 8px;
+    }
+    .pending-card p {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 20px;
+    }
+
+    /* View visibility toggle */
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
+  <!-- ── Loading splash ─────────────────────────────────────── -->
+  <div class="auth-screen" id="loadingView">
+    <div class="auth-card" style="text-align:center;">
+      <div style="font-size:2rem; margin-bottom:8px;">⏳</div>
+      <p style="color: var(--muted);">Φόρτωση...</p>
+    </div>
+  </div>
+
+  <!-- ── Login view ─────────────────────────────────────────── -->
+  <div class="auth-screen" id="loginView" hidden>
+    <div class="auth-card">
+      <h1>Εργάνη QR</h1>
+      <p class="sub">Σύνδεση στον λογαριασμό σου</p>
+      <div class="auth-error" id="authError"></div>
+      <div class="auth-info" id="authInfo"></div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" required autocomplete="email" />
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Κωδικός</label>
+          <input type="password" id="loginPassword" required minlength="6" autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn btn-primary" id="loginBtn">Σύνδεση</button>
+        <div class="links">
+          <a id="signupLink">Δημιουργία λογαριασμού</a>
+          <a id="forgotLink">Ξέχασες τον κωδικό;</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Pending view (non-admin signup) ────────────────────── -->
+  <div class="auth-screen" id="pendingView" hidden>
+    <div class="auth-card pending-card">
+      <div class="icon">⏳</div>
+      <h2>Λογαριασμός σε αναμονή</h2>
+      <p>
+        Ο λογαριασμός σου δημιουργήθηκε αλλά δεν έχει ακόμα δικαιώματα.<br>
+        Επικοινώνησε με τον διαχειριστή για να εγκριθεί.
+      </p>
+      <button class="btn btn-secondary" id="pendingLogoutBtn">Αποσύνδεση</button>
+    </div>
+  </div>
+
+  <!-- ── App view (admin) ───────────────────────────────────── -->
+  <div id="appView" hidden>
   <header>
     <h1>Εργάνη QR</h1>
     <div class="subtitle">Διαχείριση QR εργαζομένων</div>
+    <div class="user-badge">
+      <span class="email" id="userEmail"></span>
+      <button class="logout-btn" id="logoutBtn">Αποσύνδεση</button>
+    </div>
     <div class="sync-status" id="syncStatus">⏳ Σύνδεση...</div>
   </header>
 
@@ -343,6 +502,7 @@
     <button class="add-btn" id="addBtn">+ Προσθήκη Εργαζόμενου</button>
     <div class="list" id="list"></div>
   </main>
+  </div>
 
   <!-- Add modal -->
   <div class="modal" id="addModal">
@@ -388,10 +548,29 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
+    const auth = firebase.auth();
+    auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     const colRef = db.collection("employees");
+
+    const BOOTSTRAP_ADMIN_EMAIL = "siklas44@gmail.com";
 
     // ── DOM refs ─────────────────────────────────────────────────────
     const $ = (id) => document.getElementById(id);
+    const loadingView = $("loadingView");
+    const loginView   = $("loginView");
+    const pendingView = $("pendingView");
+    const appView     = $("appView");
+    const loginForm   = $("loginForm");
+    const loginEmail  = $("loginEmail");
+    const loginPasswordEl = $("loginPassword");
+    const loginBtn    = $("loginBtn");
+    const signupLink  = $("signupLink");
+    const forgotLink  = $("forgotLink");
+    const authError   = $("authError");
+    const authInfo    = $("authInfo");
+    const userEmailEl = $("userEmail");
+    const logoutBtn   = $("logoutBtn");
+    const pendingLogoutBtn = $("pendingLogoutBtn");
     const listEl      = $("list");
     const searchEl    = $("search");
     const addBtn      = $("addBtn");
@@ -475,18 +654,25 @@
         </div>`).join("");
     }
 
-    // ── Firestore real-time listener ─────────────────────────────────
-    colRef.orderBy("createdAt", "desc").onSnapshot(
-      (snapshot) => {
-        employees = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        syncStatus.textContent = "☁️ Συγχρονισμένο";
-        render();
-      },
-      (err) => {
-        syncStatus.textContent = "❌ Σφάλμα σύνδεσης";
-        console.error("Firestore error:", err);
-      }
-    );
+    // ── Firestore real-time listener (ξεκινάει μετά το admin auth) ───
+    let employeesUnsub = null;
+    function startEmployeesListener() {
+      if (employeesUnsub) return;
+      employeesUnsub = colRef.orderBy("createdAt", "desc").onSnapshot(
+        (snapshot) => {
+          employees = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+          syncStatus.textContent = "☁️ Συγχρονισμένο";
+          render();
+        },
+        (err) => {
+          syncStatus.textContent = "❌ Σφάλμα σύνδεσης";
+          console.error("Firestore error:", err);
+        }
+      );
+    }
+    function stopEmployeesListener() {
+      if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
+    }
 
     // ── CRUD ─────────────────────────────────────────────────────────
     async function addEmployee(name, code) {
@@ -583,6 +769,148 @@
       if (e.key === "Escape") {
         if (qrScreen.classList.contains("open")) closeQr();
         else if (addModal.classList.contains("open")) closeAddModal();
+      }
+    });
+
+    // ── Auth: view helpers ───────────────────────────────────────────
+    function showOnly(el) {
+      [loadingView, loginView, pendingView, appView].forEach((v) => {
+        v.hidden = (v !== el);
+      });
+    }
+    function showAuthError(msg) {
+      authError.textContent = msg;
+      authError.classList.add("show");
+      authInfo.classList.remove("show");
+    }
+    function showAuthInfo(msg) {
+      authInfo.textContent = msg;
+      authInfo.classList.add("show");
+      authError.classList.remove("show");
+    }
+    function hideAuthMessages() {
+      authError.classList.remove("show");
+      authInfo.classList.remove("show");
+    }
+    function translateAuthError(code) {
+      const map = {
+        "auth/invalid-email":          "Μη έγκυρο email.",
+        "auth/user-not-found":         "Δεν υπάρχει λογαριασμός με αυτό το email.",
+        "auth/wrong-password":         "Λάθος κωδικός.",
+        "auth/invalid-credential":     "Λάθος email ή κωδικός.",
+        "auth/email-already-in-use":   "Υπάρχει ήδη λογαριασμός με αυτό το email.",
+        "auth/weak-password":          "Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες.",
+        "auth/network-request-failed": "Πρόβλημα δικτύου. Δοκίμασε ξανά.",
+        "auth/too-many-requests":      "Πολλές αποτυχημένες προσπάθειες. Δοκίμασε αργότερα.",
+        "auth/missing-password":       "Συμπλήρωσε τον κωδικό.",
+      };
+      return map[code] || ("Σφάλμα: " + code);
+    }
+
+    // ── Auth: login / signup form ────────────────────────────────────
+    let authMode = "login"; // "login" | "signup"
+    function setAuthMode(m) {
+      authMode = m;
+      if (m === "login") {
+        loginBtn.textContent = "Σύνδεση";
+        signupLink.textContent = "Δημιουργία λογαριασμού";
+        loginPasswordEl.autocomplete = "current-password";
+      } else {
+        loginBtn.textContent = "Εγγραφή";
+        signupLink.textContent = "Έχεις λογαριασμό; Σύνδεση";
+        loginPasswordEl.autocomplete = "new-password";
+      }
+      hideAuthMessages();
+    }
+
+    loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      hideAuthMessages();
+      const email = loginEmail.value.trim();
+      const pass  = loginPasswordEl.value;
+      if (!email || !pass) return;
+      loginBtn.disabled = true;
+      try {
+        if (authMode === "login") {
+          await auth.signInWithEmailAndPassword(email, pass);
+        } else {
+          await auth.createUserWithEmailAndPassword(email, pass);
+        }
+      } catch (err) {
+        showAuthError(translateAuthError(err.code));
+      } finally {
+        loginBtn.disabled = false;
+      }
+    });
+
+    signupLink.addEventListener("click", () => {
+      setAuthMode(authMode === "login" ? "signup" : "login");
+    });
+
+    forgotLink.addEventListener("click", async () => {
+      const email = loginEmail.value.trim();
+      if (!email) {
+        showAuthError("Γράψε πρώτα το email σου παραπάνω.");
+        return;
+      }
+      try {
+        await auth.sendPasswordResetEmail(email);
+        showAuthInfo("Σου στείλαμε email για επαναφορά κωδικού. Έλεγξε τα εισερχόμενά σου.");
+      } catch (err) {
+        showAuthError(translateAuthError(err.code));
+      }
+    });
+
+    logoutBtn.addEventListener("click", () => auth.signOut());
+    pendingLogoutBtn.addEventListener("click", () => auth.signOut());
+
+    // ── Auth: state listener ─────────────────────────────────────────
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        stopEmployeesListener();
+        userEmailEl.textContent = "";
+        setAuthMode("login");
+        showOnly(loginView);
+        return;
+      }
+
+      showOnly(loadingView);
+      userEmailEl.textContent = user.email || "";
+
+      const userRef = db.collection("users").doc(user.uid);
+      let userDoc;
+      try {
+        userDoc = await userRef.get();
+      } catch (err) {
+        console.error("users.get failed:", err);
+        showOnly(loginView);
+        showAuthError("Σφάλμα φόρτωσης λογαριασμού. Δοκίμασε ξανά.");
+        return;
+      }
+
+      if (!userDoc.exists) {
+        const isBootstrap = (user.email || "").toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
+        try {
+          await userRef.set({
+            email: user.email,
+            role: isBootstrap ? "admin" : null,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (err) {
+          console.error("users.set failed:", err);
+          showOnly(loginView);
+          showAuthError("Σφάλμα δημιουργίας λογαριασμού.");
+          return;
+        }
+        userDoc = await userRef.get();
+      }
+
+      const data = userDoc.data() || {};
+      if (data.role === "admin") {
+        showOnly(appView);
+        startEmployeesListener();
+      } else {
+        showOnly(pendingView);
       }
     });
   </script>
