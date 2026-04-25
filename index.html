@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#0d6efd" />
   <title>Εργάνη QR</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     :root {
@@ -52,6 +55,11 @@
       font-size: 0.8rem;
       opacity: 0.85;
       margin-top: 2px;
+    }
+    .sync-status {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      margin-top: 4px;
     }
 
     main {
@@ -274,43 +282,29 @@
       position: absolute;
       top: calc(env(safe-area-inset-top) + 12px);
       right: 16px;
-      background: rgba(0,0,0,0.05);
+      background: #f3f4f6;
       border: none;
-      width: 44px;
-      height: 44px;
       border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      font-size: 1.4rem;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       color: var(--text);
-      font-size: 1.5rem;
-      line-height: 1;
     }
-    .qr-close:active { background: rgba(0,0,0,0.1); }
     .qr-name {
-      font-size: 1.4rem;
-      font-weight: 600;
+      font-size: 1.3rem;
+      font-weight: 700;
       margin-bottom: 24px;
       text-align: center;
-      max-width: 90%;
-    }
-    #qrcode {
-      padding: 16px;
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.1);
-    }
-    #qrcode img, #qrcode canvas {
-      display: block;
-      max-width: 100%;
-      height: auto;
     }
     .qr-code-text {
       margin-top: 20px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 0.9rem;
+      font-size: 0.8rem;
       color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       text-align: center;
       word-break: break-all;
       max-width: 90%;
@@ -339,6 +333,7 @@
   <header>
     <h1>Εργάνη QR</h1>
     <div class="subtitle">Διαχείριση QR εργαζομένων</div>
+    <div class="sync-status" id="syncStatus">⏳ Σύνδεση...</div>
   </header>
 
   <main>
@@ -381,46 +376,43 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const STORAGE_KEY = "ergani-qr-employees";
+    // ── Firebase config ──────────────────────────────────────────────
+    const firebaseConfig = {
+      apiKey: "AIzaSyBcppiaXQJ9lrbFQNAZjdKBlixmYngoHZ8",
+      authDomain: "ergani44.firebaseapp.com",
+      projectId: "ergani44",
+      storageBucket: "ergani44.firebasestorage.app",
+      messagingSenderId: "454602675440",
+      appId: "1:454602675440:web:123d3d079687e112eede35"
+    };
 
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const colRef = db.collection("employees");
+
+    // ── DOM refs ─────────────────────────────────────────────────────
     const $ = (id) => document.getElementById(id);
-    const listEl = $("list");
-    const searchEl = $("search");
-    const addBtn = $("addBtn");
-    const addModal = $("addModal");
-    const addForm = $("addForm");
-    const cancelBtn = $("cancelBtn");
-    const nameInput = $("name");
-    const codeInput = $("code");
-    const qrScreen = $("qrScreen");
-    const qrClose = $("qrClose");
-    const qrNameEl = $("qrName");
-    const qrCodeEl = $("qrcode");
-    const qrCodeText = $("qrCodeText");
-    const toastEl = $("toast");
+    const listEl      = $("list");
+    const searchEl    = $("search");
+    const addBtn      = $("addBtn");
+    const addModal    = $("addModal");
+    const addForm     = $("addForm");
+    const cancelBtn   = $("cancelBtn");
+    const nameInput   = $("name");
+    const codeInput   = $("code");
+    const qrScreen    = $("qrScreen");
+    const qrClose     = $("qrClose");
+    const qrNameEl    = $("qrName");
+    const qrCodeEl    = $("qrcode");
+    const qrCodeText  = $("qrCodeText");
+    const toastEl     = $("toast");
+    const syncStatus  = $("syncStatus");
 
-    let employees = load();
+    // ── State ────────────────────────────────────────────────────────
+    let employees = [];
     let qrInstance = null;
 
-    function load() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return [];
-        const data = JSON.parse(raw);
-        return Array.isArray(data) ? data : [];
-      } catch {
-        return [];
-      }
-    }
-
-    function save() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(employees));
-    }
-
-    function uid() {
-      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    }
-
+    // ── Helpers ──────────────────────────────────────────────────────
     function initials(name) {
       const parts = name.trim().split(/\s+/);
       if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
@@ -433,6 +425,14 @@
       }[c]));
     }
 
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add("show");
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toastEl.classList.remove("show"), 2000);
+    }
+
+    // ── Render ───────────────────────────────────────────────────────
     function render() {
       const q = searchEl.value.trim().toLowerCase();
       const filtered = q
@@ -449,15 +449,14 @@
               <line x1="19" y1="8" x2="19" y2="14"/>
               <line x1="22" y1="11" x2="16" y2="11"/>
             </svg>
-            <p>${employees.length === 0 ? "Δεν υπάρχουν εργαζόμενοι.<br>Πατήστε «Προσθήκη» για να ξεκινήσετε." : "Δεν βρέθηκαν αποτελέσματα."}</p>
-          </div>
-        `;
+            <p>${employees.length === 0
+              ? "Δεν υπάρχουν εργαζόμενοι.<br>Πατήστε «Προσθήκη» για να ξεκινήσετε."
+              : "Δεν βρέθηκαν αποτελέσματα."}</p>
+          </div>`;
         return;
       }
 
-      listEl.innerHTML = filtered
-        .map(
-          (e) => `
+      listEl.innerHTML = filtered.map((e) => `
         <div class="employee" data-id="${e.id}">
           <div class="avatar">${escapeHtml(initials(e.name))}</div>
           <div class="employee-info">
@@ -469,38 +468,67 @@
                  fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6"/>
-              <path d="M14 11v6"/>
+              <path d="M10 11v6"/><path d="M14 11v6"/>
               <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
             </svg>
           </button>
-        </div>
-      `
-        )
-        .join("");
+        </div>`).join("");
     }
 
-    function showToast(msg) {
-      toastEl.textContent = msg;
-      toastEl.classList.add("show");
-      clearTimeout(showToast._t);
-      showToast._t = setTimeout(() => toastEl.classList.remove("show"), 2000);
+    // ── Firestore real-time listener ─────────────────────────────────
+    colRef.orderBy("createdAt", "desc").onSnapshot(
+      (snapshot) => {
+        employees = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        syncStatus.textContent = "☁️ Συγχρονισμένο";
+        render();
+      },
+      (err) => {
+        syncStatus.textContent = "❌ Σφάλμα σύνδεσης";
+        console.error("Firestore error:", err);
+      }
+    );
+
+    // ── CRUD ─────────────────────────────────────────────────────────
+    async function addEmployee(name, code) {
+      try {
+        await colRef.add({
+          name: name.trim(),
+          code: code.trim(),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast("Ο εργαζόμενος προστέθηκε");
+      } catch (err) {
+        console.error(err);
+        showToast("Σφάλμα κατά την αποθήκευση");
+      }
     }
 
+    async function deleteEmployee(id) {
+      const emp = employees.find((e) => e.id === id);
+      if (!emp) return;
+      if (!confirm(`Διαγραφή του εργαζόμενου «${emp.name}»;`)) return;
+      try {
+        await colRef.doc(id).delete();
+        showToast("Ο εργαζόμενος διαγράφηκε");
+      } catch (err) {
+        console.error(err);
+        showToast("Σφάλμα κατά τη διαγραφή");
+      }
+    }
+
+    // ── Modal ────────────────────────────────────────────────────────
     function openAddModal() {
       addForm.reset();
       addModal.classList.add("open");
       setTimeout(() => nameInput.focus(), 100);
     }
-    function closeAddModal() {
-      addModal.classList.remove("open");
-    }
+    function closeAddModal() { addModal.classList.remove("open"); }
 
+    // ── QR screen ────────────────────────────────────────────────────
     function openQr(employee) {
       qrNameEl.textContent = employee.name;
       qrCodeText.textContent = employee.code;
       qrCodeEl.innerHTML = "";
-
       const size = Math.min(window.innerWidth - 80, window.innerHeight - 280, 360);
       qrInstance = new QRCode(qrCodeEl, {
         text: employee.code,
@@ -510,7 +538,6 @@
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.M,
       });
-
       qrScreen.classList.add("open");
     }
     function closeQr() {
@@ -519,28 +546,10 @@
       qrInstance = null;
     }
 
-    function addEmployee(name, code) {
-      employees.unshift({ id: uid(), name: name.trim(), code: code.trim() });
-      save();
-      render();
-      showToast("Ο εργαζόμενος προστέθηκε");
-    }
-
-    function deleteEmployee(id) {
-      const emp = employees.find((e) => e.id === id);
-      if (!emp) return;
-      if (!confirm(`Διαγραφή του εργαζόμενου «${emp.name}»;`)) return;
-      employees = employees.filter((e) => e.id !== id);
-      save();
-      render();
-      showToast("Ο εργαζόμενος διαγράφηκε");
-    }
-
+    // ── Events ───────────────────────────────────────────────────────
     addBtn.addEventListener("click", openAddModal);
     cancelBtn.addEventListener("click", closeAddModal);
-    addModal.addEventListener("click", (e) => {
-      if (e.target === addModal) closeAddModal();
-    });
+    addModal.addEventListener("click", (e) => { if (e.target === addModal) closeAddModal(); });
 
     addForm.addEventListener("submit", (e) => {
       e.preventDefault();
@@ -568,9 +577,7 @@
     });
 
     qrClose.addEventListener("click", closeQr);
-    qrScreen.addEventListener("click", (e) => {
-      if (e.target === qrScreen) closeQr();
-    });
+    qrScreen.addEventListener("click", (e) => { if (e.target === qrScreen) closeQr(); });
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
@@ -578,8 +585,6 @@
         else if (addModal.classList.contains("open")) closeAddModal();
       }
     });
-
-    render();
   </script>
 </body>
 </html>
