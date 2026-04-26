@@ -1295,7 +1295,22 @@
       }
     }
 
-    function scanTick() {
+    let barcodeDetector = null; // native API when available
+
+    async function scanTickNative() {
+      if (!scanStream) return;
+      if (scanVideo.readyState >= 2) {
+        try {
+          const codes = await barcodeDetector.detect(scanVideo);
+          if (codes && codes.length > 0 && codes[0].rawValue) {
+            onScanDecoded(codes[0].rawValue);
+          }
+        } catch (e) { /* ignore frame errors */ }
+      }
+      scanRafId = setTimeout(scanTickNative, 150);
+    }
+
+    function scanTickJsQR() {
       if (!scanStream) return;
       if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA) {
         const w = scanVideo.videoWidth;
@@ -1306,15 +1321,11 @@
           const ctx = scanCanvas.getContext("2d", { willReadFrequently: true });
           ctx.drawImage(scanVideo, 0, 0, w, h);
           const img = ctx.getImageData(0, 0, w, h);
-          const code = (typeof jsQR !== "undefined")
-            ? jsQR(img.data, w, h, { inversionAttempts: "dontInvert" })
-            : null;
-          if (code && code.data) {
-            onScanDecoded(code.data);
-          }
+          const code = jsQR(img.data, w, h, { inversionAttempts: "dontInvert" });
+          if (code && code.data) onScanDecoded(code.data);
         }
       }
-      scanRafId = requestAnimationFrame(scanTick);
+      scanRafId = requestAnimationFrame(scanTickJsQR);
     }
 
     async function openScanModal() {
@@ -1323,10 +1334,25 @@
       recentScans.clear();
       scanModal.classList.add("open");
 
-      if (typeof jsQR === "undefined") {
-        scanStatusEl.textContent = "❌ Δεν φορτώθηκε ο σαρωτής (jsQR). Δοκίμασε reload ή άλλο δίκτυο.";
+      // Pick decoder: native BarcodeDetector (Chrome/Android) or jsQR fallback
+      let decoder = null;
+      if ("BarcodeDetector" in window) {
+        try {
+          const formats = await BarcodeDetector.getSupportedFormats();
+          if (formats.includes("qr_code")) {
+            barcodeDetector = new BarcodeDetector({ formats: ["qr_code"] });
+            decoder = "native";
+          }
+        } catch (e) {}
+      }
+      if (!decoder && typeof jsQR !== "undefined") {
+        decoder = "jsqr";
+      }
+      if (!decoder) {
+        scanStatusEl.textContent = "❌ Ο browser σου δεν υποστηρίζει QR scanning και η εξωτερική βιβλιοθήκη δεν φορτώθηκε. Δοκίμασε Chrome σε Android.";
         return;
       }
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         scanStatusEl.textContent = "❌ Ο browser δεν υποστηρίζει κάμερα.";
         return;
@@ -1340,8 +1366,9 @@
         });
         scanVideo.srcObject = scanStream;
         await scanVideo.play();
-        scanStatusEl.textContent = "Στόχευσε QR εργαζόμενου";
-        scanRafId = requestAnimationFrame(scanTick);
+        scanStatusEl.textContent = "Στόχευσε QR εργαζόμενου (" + decoder + ")";
+        if (decoder === "native") scanTickNative();
+        else                       scanRafId = requestAnimationFrame(scanTickJsQR);
       } catch (err) {
         console.error("camera start failed:", err);
         scanStatusEl.textContent = "Δεν ξεκίνησε η κάμερα: " + (err.message || err.name || err);
@@ -1349,12 +1376,17 @@
     }
 
     function closeScanModal() {
-      if (scanRafId) { cancelAnimationFrame(scanRafId); scanRafId = null; }
+      if (scanRafId) {
+        cancelAnimationFrame(scanRafId);
+        clearTimeout(scanRafId);
+        scanRafId = null;
+      }
       if (scanStream) {
         scanStream.getTracks().forEach((t) => t.stop());
         scanStream = null;
       }
       scanVideo.srcObject = null;
+      barcodeDetector = null;
       scanModal.classList.remove("open");
     }
 
