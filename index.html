@@ -6,7 +6,6 @@
   <meta name="theme-color" content="#0d6efd" />
   <title>Εργάνη QR</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -1221,6 +1220,32 @@
     let scannerInstance = null;
     const recentScans = new Map(); // code → expiry timestamp
 
+    // Lazy-load html5-qrcode library, with multiple CDN fallbacks
+    let scannerLibPromise = null;
+    function loadScannerLib() {
+      if (typeof Html5Qrcode !== "undefined") return Promise.resolve(true);
+      if (scannerLibPromise) return scannerLibPromise;
+      const urls = [
+        "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js",
+        "https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js",
+        "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.10/html5-qrcode.min.js",
+      ];
+      scannerLibPromise = (async () => {
+        for (const url of urls) {
+          const ok = await new Promise((resolve) => {
+            const s = document.createElement("script");
+            s.src = url;
+            s.onload  = () => resolve(true);
+            s.onerror = () => resolve(false);
+            document.head.appendChild(s);
+          });
+          if (ok && typeof Html5Qrcode !== "undefined") return true;
+        }
+        return false;
+      })();
+      return scannerLibPromise;
+    }
+
     function parseErganiQR(text) {
       if (!text || !text.startsWith("erg|")) return null;
       const out = {};
@@ -1284,15 +1309,18 @@
 
     async function openScanModal() {
       if (!currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
-      if (typeof Html5Qrcode === "undefined") {
-        showToast("Δεν φορτώθηκε ο σαρωτής. Έλεγξε σύνδεση.");
-        return;
-      }
       scanLogEl.innerHTML = "";
       recentScans.clear();
-      scanStatusEl.textContent = "Επιτρέπει την κάμερα...";
+      scanStatusEl.textContent = "Φόρτωση σαρωτή...";
       scanModal.classList.add("open");
 
+      const loaded = await loadScannerLib();
+      if (!loaded) {
+        scanStatusEl.textContent = "❌ Δεν φορτώθηκε ο σαρωτής. Δοκίμασε άλλο δίκτυο ή ελέγξε αν κάποιος ad-blocker μπλοκάρει το CDN.";
+        return;
+      }
+
+      scanStatusEl.textContent = "Επιτρέπει την κάμερα...";
       try {
         scannerInstance = new Html5Qrcode("scanReader", { verbose: false });
         await scannerInstance.start(
