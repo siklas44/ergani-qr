@@ -466,7 +466,11 @@
       padding: 14px;
       box-shadow: var(--shadow);
       margin-bottom: 10px;
+      cursor: pointer;
+      transition: transform 0.05s, border-color 0.15s;
     }
+    .store-card:active { transform: scale(0.99); }
+    .store-card:hover { border-color: var(--primary); }
     .store-card-header {
       display: flex;
       align-items: flex-start;
@@ -1069,9 +1073,14 @@
     });
     storesListEl.addEventListener("click", (e) => {
       const delBtn = e.target.closest("[data-del-store]");
-      if (delBtn) { deleteStore(delBtn.dataset.delStore); return; }
+      if (delBtn) { e.stopPropagation(); deleteStore(delBtn.dataset.delStore); return; }
       const editBtn = e.target.closest("[data-edit-store]");
-      if (editBtn) { openStoreModal(editBtn.dataset.editStore); return; }
+      if (editBtn) { e.stopPropagation(); openStoreModal(editBtn.dataset.editStore); return; }
+      const card = e.target.closest(".store-card");
+      if (card && card.dataset.id) {
+        setCurrentStore(card.dataset.id);
+        switchTab("employees");
+      }
     });
 
     // ── Events: employee form / list ─────────────────────────────────
