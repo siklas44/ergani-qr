@@ -743,6 +743,66 @@
     .scan-log .skip   { color: var(--muted); }
     .scan-log .error  { color: var(--danger); }
 
+    /* ── Weekly schedule (in modal) ───────────────────────── */
+    .week-grid {
+      display: grid;
+      grid-template-columns: 90px 1fr 1fr auto;
+      gap: 8px;
+      align-items: center;
+      font-size: 0.88rem;
+    }
+    .week-grid .day {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .week-grid input[type="time"] {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.92rem;
+      width: 100%;
+      outline: none;
+    }
+    .week-grid input[type="time"]:disabled {
+      background: #f3f4f6;
+      color: #9ca3af;
+    }
+    .week-grid .off-toggle {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .week-grid .off-toggle input { width: 16px; height: 16px; }
+
+    /* Weekly schedule in detail view */
+    .week-table {
+      width: 100%;
+      font-size: 0.92rem;
+      border-collapse: collapse;
+    }
+    .week-table tr { border-bottom: 1px dashed var(--border); }
+    .week-table tr:last-child { border-bottom: none; }
+    .week-table td { padding: 6px 0; }
+    .week-table td:first-child {
+      font-weight: 600;
+      color: var(--text);
+      width: 100px;
+    }
+    .week-table td.off { color: var(--muted); font-style: italic; }
+
+    /* Schedule actions in detail view */
+    .schedule-edit-link {
+      display: inline-block;
+      margin-top: 8px;
+      color: var(--primary);
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
     /* ── Employee detail view ────────────────────────────── */
     .emp-detail .modal-content { max-width: 480px; }
     .emp-detail-header {
@@ -953,8 +1013,8 @@
           <input type="text" id="code" required maxlength="500" autocomplete="off" />
         </div>
         <div class="form-group">
-          <label for="schedule">Ωράριο εργασίας (προαιρετικό)</label>
-          <textarea id="schedule" rows="3" maxlength="500" placeholder="π.χ. Δευ-Παρ 09:00-17:00&#10;Σάβ 09:00-15:00"></textarea>
+          <label>Εβδομαδιαίο πρόγραμμα (προαιρετικό)</label>
+          <div class="week-grid" id="weekGrid"></div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="cancelBtn">Άκυρο</button>
@@ -1139,7 +1199,7 @@
     const nameInput     = $("name");
     const codeInput     = $("code");
     const empModalTitle = $("empModalTitle");
-    const scheduleInput = $("schedule");
+    const weekGridEl    = $("weekGrid");
     const empDetailModal = $("empDetailModal");
     const detAvatar     = $("detAvatar");
     const detName       = $("detName");
@@ -1205,6 +1265,86 @@
     let editingEmployeeId = null;  // null = add mode, otherwise edit
     let editingUserId  = null;     // null = add mode, otherwise edit
     let qrInstance = null;
+
+    // ── Schedule helpers ─────────────────────────────────────────────
+    const DAYS = [
+      { key: "mon", label: "Δευτέρα"   },
+      { key: "tue", label: "Τρίτη"     },
+      { key: "wed", label: "Τετάρτη"   },
+      { key: "thu", label: "Πέμπτη"    },
+      { key: "fri", label: "Παρασκευή" },
+      { key: "sat", label: "Σάββατο"   },
+      { key: "sun", label: "Κυριακή"   },
+    ];
+
+    // Render the 7-day grid inputs into the modal
+    function renderWeekGrid(schedule) {
+      schedule = schedule || {};
+      weekGridEl.innerHTML = DAYS.map((d) => {
+        const v = schedule[d.key] || {};
+        const off = v.off || (!v.from && !v.to);
+        return `
+          <div class="day">${d.label}</div>
+          <input type="time" data-day="${d.key}" data-field="from" value="${v.from || ""}" ${off ? "disabled" : ""}>
+          <input type="time" data-day="${d.key}" data-field="to"   value="${v.to   || ""}" ${off ? "disabled" : ""}>
+          <label class="off-toggle"><input type="checkbox" data-day="${d.key}" data-field="off" ${off ? "checked" : ""}> Ρεπό</label>
+        `;
+      }).join("");
+    }
+
+    // Read the form values back into a schedule object
+    function readWeekGrid() {
+      const out = {};
+      DAYS.forEach((d) => {
+        const off = weekGridEl.querySelector(`input[data-day="${d.key}"][data-field="off"]`).checked;
+        const from = weekGridEl.querySelector(`input[data-day="${d.key}"][data-field="from"]`).value;
+        const to   = weekGridEl.querySelector(`input[data-day="${d.key}"][data-field="to"]`).value;
+        if (off || (!from && !to)) {
+          out[d.key] = { off: true };
+        } else {
+          out[d.key] = { from, to };
+        }
+      });
+      return out;
+    }
+
+    // Toggle disabled state of time inputs when off changes
+    weekGridEl && weekGridEl.addEventListener("change", (e) => {
+      const t = e.target;
+      if (t.dataset.field === "off") {
+        const day = t.dataset.day;
+        const fromI = weekGridEl.querySelector(`input[data-day="${day}"][data-field="from"]`);
+        const toI   = weekGridEl.querySelector(`input[data-day="${day}"][data-field="to"]`);
+        fromI.disabled = t.checked;
+        toI.disabled   = t.checked;
+        if (t.checked) { fromI.value = ""; toI.value = ""; }
+      }
+    });
+
+    function scheduleHasContent(s) {
+      if (!s || typeof s !== "object") return false;
+      return DAYS.some((d) => {
+        const v = s[d.key];
+        return v && !v.off && (v.from || v.to);
+      });
+    }
+
+    // Render the schedule as a small table for the detail view
+    function renderScheduleForDetail(schedule) {
+      // Legacy: if schedule is a free-text string, just return it as-is
+      if (typeof schedule === "string") {
+        return schedule ? `<div style="white-space:pre-wrap">${escapeHtml(schedule)}</div>` : "—";
+      }
+      if (!scheduleHasContent(schedule)) return "—";
+      const rows = DAYS.map((d) => {
+        const v = (schedule || {})[d.key] || {};
+        if (v.off || (!v.from && !v.to)) {
+          return `<tr><td>${d.label}</td><td class="off">ρεπό</td></tr>`;
+        }
+        return `<tr><td>${d.label}</td><td>${escapeHtml(v.from || "")}–${escapeHtml(v.to || "")}</td></tr>`;
+      }).join("");
+      return `<table class="week-table">${rows}</table>`;
+    }
 
     // ── Helpers ──────────────────────────────────────────────────────
     function initials(name) {
@@ -1439,14 +1579,14 @@
           await empCol.doc(editingEmployeeId).update({
             name: name.trim(),
             code: code.trim(),
-            schedule: (schedule || "").trim() || null,
+            schedule: schedule || null,
           });
           showToast("Ο εργαζόμενος ενημερώθηκε");
         } else {
           await empCol.add({
             name: name.trim(),
             code: code.trim(),
-            schedule: (schedule || "").trim() || null,
+            schedule: schedule || null,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             createdBy: auth.currentUser ? auth.currentUser.uid : null,
           });
@@ -2083,17 +2223,22 @@
       if (!currentStoreId && !empId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
       editingEmployeeId = empId || null;
       addForm.reset();
+      let scheduleObj = null;
       if (empId) {
         const e = employees.find((x) => x.id === empId);
         if (e) {
           nameInput.value = e.name || "";
           codeInput.value = e.code || "";
-          scheduleInput.value = e.schedule || "";
+          // Load existing structured schedule (object) or treat string as empty grid
+          if (e.schedule && typeof e.schedule === "object") {
+            scheduleObj = e.schedule;
+          }
         }
         empModalTitle.textContent = "Επεξεργασία Εργαζόμενου";
       } else {
         empModalTitle.textContent = "Νέος Εργαζόμενος";
       }
+      renderWeekGrid(scheduleObj);
       addModal.classList.add("open");
       setTimeout(() => nameInput.focus(), 100);
     }
@@ -2163,7 +2308,7 @@
       detName.textContent = e.name || "(χωρίς όνομα)";
       const store = stores.find((s) => s.id === currentStoreId);
       detStore.textContent = store ? ("🏪 " + store.name) : "";
-      detSchedule.textContent = e.schedule || "—";
+      detSchedule.innerHTML = renderScheduleForDetail(e.schedule);
       detCode.textContent = e.code || "—";
 
       // Show edit button only if the user can edit (admin or has editEmployees)
@@ -2260,9 +2405,11 @@
       e.preventDefault();
       const name = nameInput.value.trim();
       const code = codeInput.value.trim();
-      const schedule = scheduleInput.value;
+      const schedule = readWeekGrid();
       if (!name || !code) return;
-      await saveEmployee(name, code, schedule);
+      // Only save schedule if at least one day has hours
+      const finalSchedule = scheduleHasContent(schedule) ? schedule : null;
+      await saveEmployee(name, code, finalSchedule);
       closeAddModal();
     });
 
