@@ -1450,19 +1450,35 @@
       qrCodeText.textContent = employee.code;
       qrCodeEl.innerHTML = "";
       const size = Math.min(window.innerWidth - 80, window.innerHeight - 280, 360);
-      try {
-        qrInstance = new QRCode(qrCodeEl, {
-          text: employee.code,
-          width: size,
-          height: size,
-          colorDark: "#000000",
-          colorLight: "#ffffff",
-          correctLevel: QRCode.CorrectLevel.M,
-        });
-      } catch (err) {
-        console.error("QR render failed:", err);
-        showToast("Σφάλμα δημιουργίας QR: " + (err.message || err));
-        return;
+      // Try with progressively lower error correction to fit longer codes
+      const levels = [
+        QRCode.CorrectLevel.M,
+        QRCode.CorrectLevel.L,
+      ];
+      let rendered = false;
+      for (const lvl of levels) {
+        qrCodeEl.innerHTML = "";
+        try {
+          qrInstance = new QRCode(qrCodeEl, {
+            text: employee.code,
+            width: size,
+            height: size,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: lvl,
+          });
+          rendered = true;
+          break;
+        } catch (err) {
+          console.warn("QR render at level " + lvl + " failed:", err);
+        }
+      }
+      if (!rendered) {
+        qrCodeEl.innerHTML = `<div style="padding:30px;text-align:center;color:#991b1b;font-size:0.9rem;">
+          ❌ Δεν χωράει σε QR<br>(${employee.code.length} χαρακτήρες)<br><br>
+          <strong>Σκαναρισμένο περιεχόμενο:</strong><br>
+          <textarea readonly style="width:100%;min-height:100px;font-family:monospace;font-size:0.75rem;padding:8px;border:1px solid #ccc;border-radius:6px;">${escapeHtml(employee.code)}</textarea>
+        </div>`;
       }
       qrScreen.classList.add("open");
     }
