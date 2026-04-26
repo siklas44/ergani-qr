@@ -11,17 +11,26 @@
 - [x] Deployed στο GitHub Pages: https://siklas44.github.io/ergani-qr/
 - [x] Repo είναι **public**
 - [x] CLAUDE.md + STATE.md (αυτό το αρχείο)
+- [x] **Φάση 1A — Authentication base:**
+  - [x] Firebase Auth SDK ενσωματώθηκε
+  - [x] Login screen (email + password) με signup toggle + forgot password
+  - [x] Pending view για non-admin signups
+  - [x] Bootstrap admin: siklas44@gmail.com → role=admin αυτόματα
+  - [x] Auth state handler δημιουργεί /users/{uid} doc
+  - [x] Firestore security rules (admin-only)
+  - [x] Deployed στο main → live
 
 ## 🔄 Σε εξέλιξη
-**Φάση 1 — Authentication & Admin** (ξεκίνημα)
-- [ ] Login screen (email + password)
-- [ ] Bootstrap admin για `siklas44@gmail.com`
-- [ ] Admin dashboard με tabs: Καταστήματα / Εργαζόμενοι
-- [ ] Stores CRUD (add/edit/delete)
-- [ ] Employees CRUD ανά store
-- [ ] Firestore security rules (admin-only για Φάση 1)
-- [ ] README.md με βήματα setup για χρήστη
-- [ ] Merge → main → deploy
+**Φάση 1B — Multi-store admin dashboard**
+- [ ] Tabs UI: Καταστήματα / Εργαζόμενοι
+- [ ] Stores CRUD
+- [ ] Employees CRUD ανά store (μετάβαση από flat /employees σε /stores/{id}/employees)
+- [ ] Migration των υπαρχόντων εργαζομένων (ή deletion αν είναι junk)
+
+## ⏳ Αναμονή ενεργειών χρήστη
+- [ ] Firebase Console → Authentication → Email/Password → **Enable**
+- [ ] Firebase Console → Firestore → Rules → paste `firestore.rules` → Publish (ΟΧΙ ΑΚΟΜΑ — μόλις τελειώσει η Φάση 1B)
+- [ ] Test login flow στο live URL
 
 ## 📋 Επόμενα (Φάση 2)
 - [ ] User management UI (admin προσθέτει managers/cashiers)
