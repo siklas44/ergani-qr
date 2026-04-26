@@ -1,69 +1,88 @@
 # STATE — Πού είμαστε
 
-> Τελευταία ενημέρωση: 2026-04-25
+> Τελευταία ενημέρωση: 2026-04-26
 
 ## ✅ Έτοιμα
-- [x] Βασική εφαρμογή `index.html` (591 γραμμές)
-  - Λίστα εργαζομένων με όνομα + QR code
-  - Add / Delete / Search
-  - Fullscreen QR display
-  - Firestore sync (real-time)
-- [x] Deployed στο GitHub Pages: https://siklas44.github.io/ergani-qr/
-- [x] Repo είναι **public**
-- [x] CLAUDE.md + STATE.md (αυτό το αρχείο)
-- [x] **Φάση 1A — Authentication base:**
-  - [x] Firebase Auth SDK ενσωματώθηκε
-  - [x] Login screen (email + password) με signup toggle + forgot password
-  - [x] Pending view για non-admin signups
-  - [x] Bootstrap admin: siklas44@gmail.com → role=admin αυτόματα
-  - [x] Auth state handler δημιουργεί /users/{uid} doc
-  - [x] Firestore security rules (admin-only)
-  - [x] Deployed στο main → live
 
-## 🔄 Σε εξέλιξη
-**Φάση 1B — Multi-store admin dashboard** (γράφεται τώρα)
-- [ ] Tabs UI: Καταστήματα / Εργαζόμενοι
-- [ ] Stores CRUD (add/edit/delete with cascade)
-- [ ] Store selector dropdown στο employees tab
-- [ ] Employees CRUD ανά store (path: /stores/{id}/employees)
-- [ ] Edit employee modal (νέο)
-- [ ] Επανάχρηση QR fullscreen view (ίδιο όπως πριν)
+### Βάση & Deploy
+- [x] `index.html` single-page app, deployed στο GitHub Pages
+- [x] Live URL: https://siklas44.github.io/ergani-qr/
+- [x] Repo public, branch flow: `claude/build-ergani-app-grrhF` → `main` (ff)
+- [x] CLAUDE.md + STATE.md (project docs)
 
-## ⏳ Αναμονή ενεργειών χρήστη
-- [ ] Firebase Console → Authentication → Email/Password → **Enable**
-- [ ] Firebase Console → Firestore → Rules → paste `firestore.rules` → Publish (ΟΧΙ ΑΚΟΜΑ — μόλις τελειώσει η Φάση 1B)
-- [ ] Test login flow στο live URL
+### Φάση 1A — Authentication
+- [x] Firebase Auth (email + password)
+- [x] Login screen με signup toggle + forgot password
+- [x] Bootstrap admin: `siklas44@gmail.com` → role=admin αυτόματα
+- [x] **Άλλαξε:** Δεν αυτο-δημιουργεί πια pending docs. Όποιος δεν έχει user doc και δεν είναι bootstrap → sign-out + μήνυμα «Λογαριασμός δεν είναι ενεργός»
 
-## 📋 Επόμενα (Φάση 2)
-- [ ] User management UI (admin προσθέτει managers/cashiers)
-- [ ] Permission checkboxes ανά χρήστη
-- [ ] Manager view (διαχείριση δικού του store)
-- [ ] Cashier view (μόνο QR display)
-- [ ] Επέκταση Firestore rules για managers/cashiers
+### Φάση 1B — Multi-store admin
+- [x] Tabs: 🏪 Καταστήματα / 👷 Εργαζόμενοι / 👥 Χρήστες (admin only)
+- [x] Stores CRUD (cascade delete εργαζομένων)
+- [x] Employees CRUD ανά store
+- [x] Tap κατάστημα → πάει στους εργαζομένους
+- [x] **UI hide:** Όταν δεν έχει επιλεγεί κατάστημα → κρύβονται search + κουμπιά
+- [x] Camera QR scanner (jsQR + native BarcodeDetector fallback)
+- [x] QR display fullscreen (qrcode-generator, σωστό UTF-8)
+- [x] Hidden manual add + bulk import (τα κρύψαμε — μόνο scanner ορατό)
+- [x] **Local libs:** `lib/jsQR.js` + `lib/qrcode-gen.js` (no external CDN)
 
-## 📋 Επόμενα (Φάση 3 — Features)
-- [ ] 🟢/⚪ IN/OUT indicator + tracking
-- [ ] ✏️ Edit εργαζομένου
-- [ ] 📋 Ιστορικό σαρώσεων
-- [ ] 💾 Export QR ως PNG
-- [ ] 📥 Mαζική εισαγωγή CSV
+### Φάση 2A — User management (admin)
+- [x] Tab «👥 Χρήστες» μόνο για admin
+- [x] Add/edit/delete users με ρόλο + καταστήματα + δικαιώματα (checkboxes)
+- [x] Secondary Firebase app για να μπορεί ο admin να δημιουργεί χρήστες χωρίς να βγαίνει
+- [x] Auto-generated password + 🎲 button
+- [x] **Recovery flow:** Αν admin ξανα-δημιουργήσει email που υπάρχει στο Auth → fallback σε sign-in + reset link
+- [x] **Inline error display** στο user modal (όχι μόνο toast — δεν χάνεται)
+
+### Φάση 2B — Manager/Cashier views
+- [x] Non-admin: μόνο tab Εργαζόμενοι
+- [x] Filter στα assigned καταστήματα
+- [x] Auto-select αν 1 κατάστημα
+- [x] Permission gating: εμφάνιση/απόκρυψη κουμπιών (📷, ✏️, 🗑️, 📱) με βάση δικαιώματα
+
+### Φάση 3 — Employee features
+- [x] Detail view (tap κάρτα): avatar, όνομα, ωράριο, κωδικός
+- [x] **Δομημένο εβδομαδιαίο πρόγραμμα** (Δευ-Κυρ + ώρες + Ρεπό checkbox)
+- [x] QR display μόνο μέσω 📱 button (ξεχωριστό από detail)
+- [x] Backwards-compat για παλιά string schedule
+
+### Firestore Security Rules
+- [x] `firestore.rules` deployed (admin/manager/cashier path)
+- [x] Helpers: hasStore, hasPermission, isAdmin, isBootstrapAdmin
+- [x] User must republish στο Firebase Console όποτε αλλάζουν
+
+## 📋 Επόμενα candidates (Φάση 3+)
+- [ ] **Καθολικό weekly schedule dashboard** (όλοι οι εργαζόμενοι σε ένα grid)
+- [ ] Templates ωραρίων (πρωί/απόγευμα/πλήρες)
+- [ ] Μαζική εφαρμογή ωραρίου (σε πολλούς ταυτόχρονα)
+- [ ] 🟢/⚪ IN/OUT indicator + ιστορικό σαρώσεων
+- [ ] 💾 Export QR ως PNG για εκτύπωση
 - [ ] 🌐 PWA / offline mode
+- [ ] 📊 Στατιστικά (πόσοι σκαναρίστηκαν σήμερα)
+- [ ] Επανα-ενεργοποίηση μαζικής εισαγωγής CSV (αν χρειαστεί)
 
 ## 🔑 Decisions Log
-- **Auth**: Email + Password (όχι Google login) — γιατί δεν θα έχουν όλοι Gmail
-- **Bootstrap admin**: hardcoded `siklas44@gmail.com` → πρώτο signup του = admin
+- **Auth**: Email + Password (όχι Google login)
+- **Bootstrap admin**: hardcoded `siklas44@gmail.com`
 - **Permissions**: configurable από admin (όχι hardcoded ανά ρόλο)
-- **Multi-store**: stores είναι top-level collection, employees είναι subcollection
-- **First admin password**: ορίζεται από τον admin στο signup
-- **Old `employees` collection**: orphan data — αγνοείται, καθαρισμός μετά manually
+- **Multi-store**: stores top-level collection, employees subcollection
+- **No pending state**: όποιος δεν έχει user doc και δεν είναι bootstrap → sign-out
+- **Schedule**: δομημένο object `{ mon: {from,to|off}, ... }` ανά εργαζόμενο
+- **QR libraries**: vendored locally (lib/) — user network δεν έφτανε σε jsdelivr/unpkg
+- **QR generator**: qrcode-generator (Kazuhiko Arase) λόγω UTF-8 bug στο qrcodejs
+- **Old `employees` flat collection**: orphan junk — αγνοείται
 
-## ⚠️ Known Issues
-- Η βάση είναι αυτή τη στιγμή **ΟΡΘΑΝΗ ΑΝΟΙΧΤΗ** (no auth, no rules) — ο καθένας με το URL μπορεί να γράψει. **Φάση 1 το κλείνει.**
-- Υπάρχουν άγνωστα δεδομένα στο `employees` collection (από spam ή παλιά χρήση)
+## ⚠️ User-side actions
+- [x] Firebase Console → Authentication → Email/Password → Enable
+- [x] Firebase Console → Firestore → Rules → Publish (νεότερη έκδοση)
+- [x] GitHub Pages enabled στο main / root
 
 ## 🛠 Σημειώσεις για επόμενο session
 Αν χαθεί το context, διάβασε:
 1. `CLAUDE.md` για οδηγίες project
 2. Αυτό το αρχείο για τρέχουσα κατάσταση
-3. `index.html` για τον κώδικα
-4. Συνέχισε από το πρώτο unchecked item της τρέχουσας φάσης
+3. `index.html` για τον κώδικα (~2700 γραμμές)
+4. `firestore.rules` για security rules
+5. `lib/` για bundled libraries
+6. Συνέχισε από τα «Επόμενα candidates»

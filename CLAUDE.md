@@ -35,17 +35,30 @@ Multi-store, role-based (admin / manager / cashier).
 ## Data Model (Firestore)
 ```
 /users/{uid}
-  email, role, name?, storeIds: [string], permissions: {...}, createdAt
+  email, role: "admin"|"manager"|"cashier", name?, storeIds: [string],
+  permissions: {
+    viewEmployees, showQR, scanQR, addEmployees, editEmployees, deleteEmployees
+  },
+  createdAt, createdBy
 
 /stores/{storeId}
   name, address?, createdAt, createdBy
 
 /stores/{storeId}/employees/{empId}
-  name, code, createdAt, createdBy
+  name, code, schedule: { mon:{from,to|off}, tue:..., ..., sun:... },
+  createdAt, createdBy
 
-/stores/{storeId}/clockEvents/{eventId}   (Φάση 3)
+/stores/{storeId}/clockEvents/{eventId}   (μελλοντικό)
   empId, type: "in"|"out", timestamp, recordedBy
 ```
+
+## Files
+- `index.html` — main app (~2700 γραμμές)
+- `firestore.rules` — security rules (apply to Firebase Console manually)
+- `lib/jsQR.js` — vendored QR scanner (camera decode)
+- `lib/qrcode-gen.js` — vendored QR generator (UTF-8-safe display)
+- `CLAUDE.md` — project instructions
+- `STATE.md` — current progress
 
 ## Conventions
 - Γλώσσα UI: **Ελληνικά**
