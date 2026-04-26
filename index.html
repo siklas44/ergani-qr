@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#0d6efd" />
   <title>Εργάνη QR</title>
-  <script src="lib/qrcode.min.js"></script>
+  <script src="lib/qrcode-gen.js"></script>
   <script src="lib/jsQR.js"></script>
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -1438,7 +1438,7 @@
 
     // ── QR screen ────────────────────────────────────────────────────
     function openQr(employee) {
-      if (typeof QRCode === "undefined") {
+      if (typeof qrcode === "undefined") {
         showToast("Δεν φορτώθηκε η βιβλιοθήκη QR. Hard refresh.");
         return;
       }
@@ -1450,35 +1450,34 @@
       qrCodeText.textContent = employee.code;
       qrCodeEl.innerHTML = "";
       const size = Math.min(window.innerWidth - 80, window.innerHeight - 280, 360);
-      // Try with progressively lower error correction to fit longer codes
-      const levels = [
-        QRCode.CorrectLevel.M,
-        QRCode.CorrectLevel.L,
-      ];
-      let rendered = false;
-      for (const lvl of levels) {
-        qrCodeEl.innerHTML = "";
-        try {
-          qrInstance = new QRCode(qrCodeEl, {
-            text: employee.code,
-            width: size,
-            height: size,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: lvl,
-          });
-          rendered = true;
-          break;
-        } catch (err) {
-          console.warn("QR render at level " + lvl + " failed:", err);
-        }
-      }
-      if (!rendered) {
+
+      // qrcode-generator: typeNumber 0 = auto-select smallest fit
+      // errorCorrection 'L' allows the most data
+      let qr;
+      try {
+        qr = qrcode(0, "L");
+        qr.addData(employee.code);
+        qr.make();
+      } catch (err) {
+        console.error("QR build failed:", err);
         qrCodeEl.innerHTML = `<div style="padding:30px;text-align:center;color:#991b1b;font-size:0.9rem;">
-          ❌ Δεν χωράει σε QR<br>(${employee.code.length} χαρακτήρες)<br><br>
+          ❌ Σφάλμα δημιουργίας QR<br>(${employee.code.length} χαρακτήρες)<br><br>
           <strong>Σκαναρισμένο περιεχόμενο:</strong><br>
           <textarea readonly style="width:100%;min-height:100px;font-family:monospace;font-size:0.75rem;padding:8px;border:1px solid #ccc;border-radius:6px;">${escapeHtml(employee.code)}</textarea>
         </div>`;
+        qrScreen.classList.add("open");
+        return;
+      }
+
+      // Render as scalable img (data URL)
+      const moduleCount = qr.getModuleCount();
+      const cellSize = Math.max(2, Math.floor(size / (moduleCount + 8)));
+      qrCodeEl.innerHTML = qr.createImgTag(cellSize, 4 * cellSize);
+      const img = qrCodeEl.querySelector("img");
+      if (img) {
+        img.style.width  = size + "px";
+        img.style.height = size + "px";
+        img.style.imageRendering = "pixelated";
       }
       qrScreen.classList.add("open");
     }
