@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0d6efd" />
   <title>Εργάνη QR</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -582,6 +583,43 @@
     }
     .import-preview strong { color: var(--text); }
 
+    /* ── Scanner ──────────────────────────────────────────── */
+    #scanReader {
+      width: 100%;
+      max-width: 360px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+    }
+    #scanReader video { width: 100% !important; height: auto !important; display: block; }
+    .scan-status {
+      text-align: center;
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin: 10px 0;
+    }
+    .scan-log {
+      max-height: 160px;
+      overflow-y: auto;
+      list-style: none;
+      padding: 0;
+      margin: 8px 0;
+      font-size: 0.85rem;
+      border-top: 1px solid var(--border);
+    }
+    .scan-log li {
+      padding: 6px 4px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .scan-log li:last-child { border-bottom: none; }
+    .scan-log .added  { color: #15803d; }
+    .scan-log .skip   { color: var(--muted); }
+    .scan-log .error  { color: var(--danger); }
+
     /* View visibility toggle */
     [hidden] { display: none !important; }
   </style>
@@ -665,6 +703,7 @@
           <input type="search" id="search" placeholder="Αναζήτηση εργαζόμενου..." autocomplete="off" />
         </div>
         <button class="add-btn" id="addBtn" disabled>+ Προσθήκη Εργαζόμενου</button>
+        <button class="secondary-btn" id="scanBtn" disabled>📷 Σάρωση QR (κάμερα)</button>
         <button class="secondary-btn" id="importBtn" disabled>📥 Μαζική εισαγωγή από Excel/CSV</button>
         <div class="list" id="list"></div>
       </section>
@@ -732,6 +771,23 @@
       <div class="modal-actions">
         <button type="button" class="btn btn-secondary" id="importCancelBtn">Άκυρο</button>
         <button type="button" class="btn btn-primary" id="importDoBtn" disabled>Εισαγωγή</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scanner modal -->
+  <div class="modal" id="scanModal">
+    <div class="modal-content">
+      <h2>Σάρωση QR εργαζομένων</h2>
+      <p class="hint">
+        Στρέψε την κάμερα στο QR του εργαζόμενου. Σαρώνει συνέχεια — μπορείς να βάλεις πολλούς διαδοχικά.
+        Όσοι υπάρχουν ήδη παραλείπονται αυτόματα.
+      </p>
+      <div id="scanReader"></div>
+      <div class="scan-status" id="scanStatus">Επιτρέπει την κάμερα...</div>
+      <ul class="scan-log" id="scanLog"></ul>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" id="scanCloseBtn">Κλείσιμο</button>
       </div>
     </div>
   </div>
@@ -810,6 +866,11 @@
     const importPreview   = $("importPreview");
     const importCancelBtn = $("importCancelBtn");
     const importDoBtn     = $("importDoBtn");
+    const scanBtn         = $("scanBtn");
+    const scanModal       = $("scanModal");
+    const scanStatusEl    = $("scanStatus");
+    const scanLogEl       = $("scanLog");
+    const scanCloseBtn    = $("scanCloseBtn");
     // QR screen
     const qrScreen      = $("qrScreen");
     const qrClose       = $("qrClose");
@@ -951,6 +1012,7 @@
       employees = [];
       addBtn.disabled = !currentStoreId;
       importBtn.disabled = !currentStoreId;
+      scanBtn.disabled = !currentStoreId;
       if (!currentStoreId) {
         renderEmployees();
         return;
@@ -1155,6 +1217,106 @@
     }
     function closeImportModal() { importModal.classList.remove("open"); }
 
+    // ── Camera QR scanner ────────────────────────────────────────────
+    let scannerInstance = null;
+    const recentScans = new Map(); // code → expiry timestamp
+
+    function parseErganiQR(text) {
+      if (!text || !text.startsWith("erg|")) return null;
+      const out = {};
+      text.slice(4).split(";").forEach((part) => {
+        const idx = part.indexOf(":");
+        if (idx < 0) return;
+        out[part.slice(0, idx)] = part.slice(idx + 1);
+      });
+      return out;
+    }
+
+    function scanLogPush(cls, msg) {
+      const li = document.createElement("li");
+      li.className = cls;
+      li.textContent = msg;
+      scanLogEl.insertBefore(li, scanLogEl.firstChild);
+      // Beep on success
+      if (cls === "added") try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator();
+        o.frequency.value = 880;
+        o.connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.08);
+      } catch (e) {}
+    }
+
+    async function onScanDecoded(text) {
+      // Debounce same code for 3 seconds
+      const now = Date.now();
+      // Clean expired
+      for (const [k, exp] of recentScans) if (exp < now) recentScans.delete(k);
+      if (recentScans.has(text)) return;
+      recentScans.set(text, now + 3000);
+
+      const erg = parseErganiQR(text);
+      let name;
+      if (erg && (erg.ln || erg.nm)) {
+        name = `${erg.ln || ""} ${erg.nm || ""}`.trim();
+      } else {
+        name = "(άγνωστο)";
+      }
+
+      if (employees.find((e) => e.code === text)) {
+        scanLogPush("skip", `⏭️  ${name} — υπάρχει ήδη`);
+        return;
+      }
+      try {
+        await db.collection("stores").doc(currentStoreId)
+          .collection("employees").add({
+            name,
+            code: text,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdBy: auth.currentUser ? auth.currentUser.uid : null,
+          });
+        scanLogPush("added", `✅  ${name}`);
+      } catch (err) {
+        console.error("scan add failed:", err);
+        scanLogPush("error", `❌  ${name} — σφάλμα`);
+      }
+    }
+
+    async function openScanModal() {
+      if (!currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
+      if (typeof Html5Qrcode === "undefined") {
+        showToast("Δεν φορτώθηκε ο σαρωτής. Έλεγξε σύνδεση.");
+        return;
+      }
+      scanLogEl.innerHTML = "";
+      recentScans.clear();
+      scanStatusEl.textContent = "Επιτρέπει την κάμερα...";
+      scanModal.classList.add("open");
+
+      try {
+        scannerInstance = new Html5Qrcode("scanReader", { verbose: false });
+        await scannerInstance.start(
+          { facingMode: { ideal: "environment" } },
+          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
+          (decoded) => onScanDecoded(decoded),
+          () => {} // ignore per-frame failures
+        );
+        scanStatusEl.textContent = "Στόχευσε QR εργαζόμενου";
+      } catch (err) {
+        console.error("scanner start failed:", err);
+        scanStatusEl.textContent = "Δεν ξεκίνησε η κάμερα: " + (err.message || err);
+      }
+    }
+
+    async function closeScanModal() {
+      if (scannerInstance) {
+        try { await scannerInstance.stop(); } catch (e) {}
+        try { scannerInstance.clear(); } catch (e) {}
+        scannerInstance = null;
+      }
+      scanModal.classList.remove("open");
+    }
+
     // ── Modal: store ─────────────────────────────────────────────────
     function openStoreModal(storeId) {
       editingStoreId = storeId || null;
@@ -1270,6 +1432,11 @@
     storeSelector.addEventListener("change", (e) => setCurrentStore(e.target.value));
     searchEl.addEventListener("input", renderEmployees);
 
+    // Scanner wiring
+    scanBtn.addEventListener("click", openScanModal);
+    scanCloseBtn.addEventListener("click", closeScanModal);
+    scanModal.addEventListener("click", (e) => { if (e.target === scanModal) closeScanModal(); });
+
     // Bulk import wiring
     importBtn.addEventListener("click", openImportModal);
     importCancelBtn.addEventListener("click", closeImportModal);
@@ -1303,6 +1470,7 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         if (qrScreen.classList.contains("open")) closeQr();
+        else if (scanModal.classList.contains("open")) closeScanModal();
         else if (importModal.classList.contains("open")) closeImportModal();
         else if (storeModal.classList.contains("open")) closeStoreModal();
         else if (addModal.classList.contains("open")) closeAddModal();
