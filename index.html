@@ -1510,6 +1510,8 @@
         userEmailInput.value = u.email || "";
         userEmailInput.disabled = true;
         userPasswordGroup.hidden = true;
+        userPasswordInput.required = false;
+        userPasswordInput.value = "";
         userNameInput.value = u.name || "";
         setRolePill(u.role || "cashier");
         // restore actual perms (override defaults)
@@ -1525,6 +1527,7 @@
         userModalTitle.textContent = "Νέος Χρήστης";
         userEmailInput.disabled = false;
         userPasswordGroup.hidden = false;
+        userPasswordInput.required = true;
         userPasswordInput.value = generatePassword();
         setRolePill("cashier");
         renderStoreCheckboxes([]);
