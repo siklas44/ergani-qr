@@ -1232,6 +1232,30 @@
         );
     }
 
+    // For non-admin: fetch only assigned stores explicitly (rules deny full collection scan)
+    async function loadAssignedStores(storeIds) {
+      stores = [];
+      if (!storeIds || storeIds.length === 0) {
+        renderStoreSelector();
+        return;
+      }
+      try {
+        const fetched = await Promise.all(
+          storeIds.map((id) => db.collection("stores").doc(id).get())
+        );
+        stores = fetched
+          .filter((d) => d.exists)
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      } catch (err) {
+        console.error("loadAssignedStores failed:", err);
+        showToast("Σφάλμα φόρτωσης καταστημάτων");
+      }
+      renderStoreSelector();
+      // Auto-select if only one
+      if (stores.length === 1) setCurrentStore(stores[0].id);
+    }
+
     function setCurrentStore(storeId) {
       currentStoreId = storeId || null;
       if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
@@ -1639,6 +1663,47 @@
         console.error("deleteUser failed:", err);
         showToast("Σφάλμα: " + (err.code || err.message));
       }
+    }
+
+    // ── Permission-based UI gating (for non-admin views) ─────────────
+    function applyPermissions(role, perms) {
+      perms = perms || {};
+      const isAdminRole = role === "admin";
+
+      // Tab visibility
+      const storesTabBtn = document.querySelector('.tab-btn[data-tab="stores"]');
+      const employeesTabBtn = document.querySelector('.tab-btn[data-tab="employees"]');
+      if (storesTabBtn) storesTabBtn.hidden = !isAdminRole;
+      usersTabBtn.hidden = !isAdminRole;
+      // Employees tab is always visible for any role with at least 1 store
+
+      // Buttons inside employees tab
+      // Admin: all buttons. Others: based on permissions.
+      scanBtn.hidden = !(isAdminRole || perms.scanQR);
+      addBtn.hidden  = !(isAdminRole || perms.addEmployees);
+      // import is hidden for non-admins regardless
+      importBtn.hidden = !isAdminRole;
+    }
+
+    // Per-employee row buttons: rebuilt by renderEmployees, so just gate via CSS
+    function applyEmployeePermissions(role, perms) {
+      perms = perms || {};
+      const isAdminRole = role === "admin";
+      const showQR     = isAdminRole || perms.showQR;
+      const canEdit    = isAdminRole || perms.editEmployees;
+      const canDelete  = isAdminRole || perms.deleteEmployees;
+      // Use CSS to hide buttons cleanly without re-rendering
+      let style = document.getElementById("permStyle");
+      if (!style) {
+        style = document.createElement("style");
+        style.id = "permStyle";
+        document.head.appendChild(style);
+      }
+      const rules = [];
+      if (!showQR)    rules.push('[data-qr-emp]   { display:none !important; }');
+      if (!canEdit)   rules.push('[data-edit-emp] { display:none !important; }');
+      if (!canDelete) rules.push('[data-del-emp]  { display:none !important; }');
+      style.textContent = rules.join("\n");
     }
 
     // ── Bulk import: parse / preview / perform ───────────────────────
@@ -2269,14 +2334,18 @@
       const data = userDoc.data() || {};
       currentUserDoc = data;
       if (data.role === "admin") {
-        usersTabBtn.hidden = false;
+        applyPermissions("admin", {});
+        applyEmployeePermissions("admin", {});
         showOnly(appView);
         switchTab("stores");
         startStoresListener();
         startUsersListener();
       } else if (data.role === "manager" || data.role === "cashier") {
-        // Phase 2B will render proper non-admin views — for now show pending
-        showOnly(pendingView);
+        applyPermissions(data.role, data.permissions || {});
+        applyEmployeePermissions(data.role, data.permissions || {});
+        showOnly(appView);
+        switchTab("employees");
+        await loadAssignedStores(data.storeIds || []);
       } else {
         showOnly(pendingView);
       }
