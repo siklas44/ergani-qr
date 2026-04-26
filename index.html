@@ -743,6 +743,60 @@
     .scan-log .skip   { color: var(--muted); }
     .scan-log .error  { color: var(--danger); }
 
+    /* ── Employee detail view ────────────────────────────── */
+    .emp-detail .modal-content { max-width: 480px; }
+    .emp-detail-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 8px 0 16px;
+    }
+    .emp-detail-header .avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0d6efd, #6610f2);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .emp-detail-header h2 {
+      margin: 0;
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+    .emp-detail-section {
+      border-top: 1px solid var(--border);
+      padding: 14px 0;
+    }
+    .emp-detail-section .label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .emp-detail-section .value {
+      font-size: 0.95rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    .emp-detail-section .value.code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      word-break: break-all;
+      color: var(--muted);
+    }
+    .emp-detail-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 18px;
+    }
+    .emp-detail-actions .btn { flex: 1; }
+
     /* View visibility toggle */
     [hidden] { display: none !important; }
   </style>
@@ -840,6 +894,30 @@
     </main>
   </div>
 
+  <!-- Employee detail view -->
+  <div class="modal emp-detail" id="empDetailModal">
+    <div class="modal-content">
+      <div class="emp-detail-header">
+        <div class="avatar" id="detAvatar"></div>
+        <h2 id="detName"></h2>
+        <div id="detStore" style="color: var(--muted); font-size: 0.88rem; margin-top: 4px;"></div>
+      </div>
+      <div class="emp-detail-section">
+        <div class="label">Ωράριο εργασίας</div>
+        <div class="value" id="detSchedule">—</div>
+      </div>
+      <div class="emp-detail-section">
+        <div class="label">Κωδικός Εργάνη</div>
+        <div class="value code" id="detCode">—</div>
+      </div>
+      <div class="emp-detail-actions">
+        <button type="button" class="btn btn-secondary" id="detCloseBtn">Κλείσιμο</button>
+        <button type="button" class="btn btn-secondary" id="detEditBtn" hidden>✏️ Επεξεργασία</button>
+        <button type="button" class="btn btn-primary" id="detQrBtn">📱 Εμφάνιση QR</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Store modal (add/edit) -->
   <div class="modal" id="storeModal">
     <div class="modal-content">
@@ -873,6 +951,10 @@
         <div class="form-group">
           <label for="code">Κωδικός QR (Εργάνη)</label>
           <input type="text" id="code" required maxlength="500" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="schedule">Ωράριο εργασίας (προαιρετικό)</label>
+          <textarea id="schedule" rows="3" maxlength="500" placeholder="π.χ. Δευ-Παρ 09:00-17:00&#10;Σάβ 09:00-15:00"></textarea>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="cancelBtn">Άκυρο</button>
@@ -1057,6 +1139,16 @@
     const nameInput     = $("name");
     const codeInput     = $("code");
     const empModalTitle = $("empModalTitle");
+    const scheduleInput = $("schedule");
+    const empDetailModal = $("empDetailModal");
+    const detAvatar     = $("detAvatar");
+    const detName       = $("detName");
+    const detStore      = $("detStore");
+    const detSchedule   = $("detSchedule");
+    const detCode       = $("detCode");
+    const detCloseBtn   = $("detCloseBtn");
+    const detQrBtn      = $("detQrBtn");
+    const detEditBtn    = $("detEditBtn");
     const importBtn       = $("importBtn");
     const importModal     = $("importModal");
     const importText      = $("importText");
@@ -1339,7 +1431,7 @@
     }
 
     // ── CRUD: employees (per current store) ──────────────────────────
-    async function saveEmployee(name, code) {
+    async function saveEmployee(name, code, schedule) {
       if (!currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
       const empCol = db.collection("stores").doc(currentStoreId).collection("employees");
       try {
@@ -1347,12 +1439,14 @@
           await empCol.doc(editingEmployeeId).update({
             name: name.trim(),
             code: code.trim(),
+            schedule: (schedule || "").trim() || null,
           });
           showToast("Ο εργαζόμενος ενημερώθηκε");
         } else {
           await empCol.add({
             name: name.trim(),
             code: code.trim(),
+            schedule: (schedule || "").trim() || null,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             createdBy: auth.currentUser ? auth.currentUser.uid : null,
           });
@@ -1994,6 +2088,7 @@
         if (e) {
           nameInput.value = e.name || "";
           codeInput.value = e.code || "";
+          scheduleInput.value = e.schedule || "";
         }
         empModalTitle.textContent = "Επεξεργασία Εργαζόμενου";
       } else {
@@ -2056,6 +2151,33 @@
       qrScreen.classList.remove("open");
       qrCodeEl.innerHTML = "";
       qrInstance = null;
+    }
+
+    // ── Employee detail view ─────────────────────────────────────────
+    let detailEmpId = null;
+    function openEmployeeDetail(empId) {
+      const e = employees.find((x) => x.id === empId);
+      if (!e) return;
+      detailEmpId = empId;
+      detAvatar.textContent = initials(e.name || "?");
+      detName.textContent = e.name || "(χωρίς όνομα)";
+      const store = stores.find((s) => s.id === currentStoreId);
+      detStore.textContent = store ? ("🏪 " + store.name) : "";
+      detSchedule.textContent = e.schedule || "—";
+      detCode.textContent = e.code || "—";
+
+      // Show edit button only if the user can edit (admin or has editEmployees)
+      const role = (currentUserDoc && currentUserDoc.role) || null;
+      const canEdit = role === "admin" || (currentUserDoc && currentUserDoc.permissions && currentUserDoc.permissions.editEmployees);
+      detEditBtn.hidden = !canEdit;
+      const canShowQR = role === "admin" || (currentUserDoc && currentUserDoc.permissions && currentUserDoc.permissions.showQR);
+      detQrBtn.hidden = !canShowQR;
+
+      empDetailModal.classList.add("open");
+    }
+    function closeEmployeeDetail() {
+      empDetailModal.classList.remove("open");
+      detailEmpId = null;
     }
 
     // ── Events: tabs ─────────────────────────────────────────────────
@@ -2138,8 +2260,9 @@
       e.preventDefault();
       const name = nameInput.value.trim();
       const code = codeInput.value.trim();
+      const schedule = scheduleInput.value;
       if (!name || !code) return;
-      await saveEmployee(name, code);
+      await saveEmployee(name, code, schedule);
       closeAddModal();
     });
 
@@ -2179,9 +2302,21 @@
       }
       const card = e.target.closest(".employee");
       if (card) {
-        const emp = employees.find((x) => x.id === card.dataset.id);
-        if (emp) openQr(emp);
+        openEmployeeDetail(card.dataset.id);
       }
+    });
+
+    // Detail view buttons
+    detCloseBtn.addEventListener("click", closeEmployeeDetail);
+    empDetailModal.addEventListener("click", (e) => { if (e.target === empDetailModal) closeEmployeeDetail(); });
+    detQrBtn.addEventListener("click", () => {
+      const e = employees.find((x) => x.id === detailEmpId);
+      if (e) { closeEmployeeDetail(); openQr(e); }
+    });
+    detEditBtn.addEventListener("click", () => {
+      const id = detailEmpId;
+      closeEmployeeDetail();
+      openEmployeeModal(id);
     });
 
     // ── Events: QR / keyboard ────────────────────────────────────────
@@ -2192,6 +2327,7 @@
       if (e.key === "Escape") {
         if (qrScreen.classList.contains("open")) closeQr();
         else if (scanModal.classList.contains("open")) closeScanModal();
+        else if (empDetailModal.classList.contains("open")) closeEmployeeDetail();
         else if (importModal.classList.contains("open")) closeImportModal();
         else if (userModal.classList.contains("open")) closeUserModal();
         else if (storeModal.classList.contains("open")) closeStoreModal();
