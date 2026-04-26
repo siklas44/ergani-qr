@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0d6efd" />
   <title>Εργάνη QR</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
   <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -590,8 +591,15 @@
       border-radius: 12px;
       overflow: hidden;
       background: #000;
+      aspect-ratio: 1 / 1;
+      position: relative;
     }
-    #scanReader video { width: 100% !important; height: auto !important; display: block; }
+    #scanReader video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
     .scan-status {
       text-align: center;
       font-size: 0.88rem;
@@ -782,7 +790,10 @@
         Στρέψε την κάμερα στο QR του εργαζόμενου. Σαρώνει συνέχεια — μπορείς να βάλεις πολλούς διαδοχικά.
         Όσοι υπάρχουν ήδη παραλείπονται αυτόματα.
       </p>
-      <div id="scanReader"></div>
+      <div id="scanReader">
+        <video id="scanVideo" playsinline muted autoplay></video>
+        <canvas id="scanCanvas" hidden></canvas>
+      </div>
       <div class="scan-status" id="scanStatus">Επιτρέπει την κάμερα...</div>
       <ul class="scan-log" id="scanLog"></ul>
       <div class="modal-actions">
@@ -1216,35 +1227,12 @@
     }
     function closeImportModal() { importModal.classList.remove("open"); }
 
-    // ── Camera QR scanner ────────────────────────────────────────────
-    let scannerInstance = null;
+    // ── Camera QR scanner (jsQR + getUserMedia) ──────────────────────
+    let scanStream = null;
+    let scanRafId  = null;
+    const scanVideo  = $("scanVideo");
+    const scanCanvas = $("scanCanvas");
     const recentScans = new Map(); // code → expiry timestamp
-
-    // Lazy-load html5-qrcode library, with multiple CDN fallbacks
-    let scannerLibPromise = null;
-    function loadScannerLib() {
-      if (typeof Html5Qrcode !== "undefined") return Promise.resolve(true);
-      if (scannerLibPromise) return scannerLibPromise;
-      const urls = [
-        "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js",
-        "https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js",
-        "https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.10/html5-qrcode.min.js",
-      ];
-      scannerLibPromise = (async () => {
-        for (const url of urls) {
-          const ok = await new Promise((resolve) => {
-            const s = document.createElement("script");
-            s.src = url;
-            s.onload  = () => resolve(true);
-            s.onerror = () => resolve(false);
-            document.head.appendChild(s);
-          });
-          if (ok && typeof Html5Qrcode !== "undefined") return true;
-        }
-        return false;
-      })();
-      return scannerLibPromise;
-    }
 
     function parseErganiQR(text) {
       if (!text || !text.startsWith("erg|")) return null;
@@ -1307,41 +1295,66 @@
       }
     }
 
+    function scanTick() {
+      if (!scanStream) return;
+      if (scanVideo.readyState === scanVideo.HAVE_ENOUGH_DATA) {
+        const w = scanVideo.videoWidth;
+        const h = scanVideo.videoHeight;
+        if (w && h) {
+          scanCanvas.width  = w;
+          scanCanvas.height = h;
+          const ctx = scanCanvas.getContext("2d", { willReadFrequently: true });
+          ctx.drawImage(scanVideo, 0, 0, w, h);
+          const img = ctx.getImageData(0, 0, w, h);
+          const code = (typeof jsQR !== "undefined")
+            ? jsQR(img.data, w, h, { inversionAttempts: "dontInvert" })
+            : null;
+          if (code && code.data) {
+            onScanDecoded(code.data);
+          }
+        }
+      }
+      scanRafId = requestAnimationFrame(scanTick);
+    }
+
     async function openScanModal() {
       if (!currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
       scanLogEl.innerHTML = "";
       recentScans.clear();
-      scanStatusEl.textContent = "Φόρτωση σαρωτή...";
       scanModal.classList.add("open");
 
-      const loaded = await loadScannerLib();
-      if (!loaded) {
-        scanStatusEl.textContent = "❌ Δεν φορτώθηκε ο σαρωτής. Δοκίμασε άλλο δίκτυο ή ελέγξε αν κάποιος ad-blocker μπλοκάρει το CDN.";
+      if (typeof jsQR === "undefined") {
+        scanStatusEl.textContent = "❌ Δεν φορτώθηκε ο σαρωτής (jsQR). Δοκίμασε reload ή άλλο δίκτυο.";
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        scanStatusEl.textContent = "❌ Ο browser δεν υποστηρίζει κάμερα.";
         return;
       }
 
       scanStatusEl.textContent = "Επιτρέπει την κάμερα...";
       try {
-        scannerInstance = new Html5Qrcode("scanReader", { verbose: false });
-        await scannerInstance.start(
-          { facingMode: { ideal: "environment" } },
-          { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-          (decoded) => onScanDecoded(decoded),
-          () => {} // ignore per-frame failures
-        );
+        scanStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        scanVideo.srcObject = scanStream;
+        await scanVideo.play();
         scanStatusEl.textContent = "Στόχευσε QR εργαζόμενου";
+        scanRafId = requestAnimationFrame(scanTick);
       } catch (err) {
-        console.error("scanner start failed:", err);
-        scanStatusEl.textContent = "Δεν ξεκίνησε η κάμερα: " + (err.message || err);
+        console.error("camera start failed:", err);
+        scanStatusEl.textContent = "Δεν ξεκίνησε η κάμερα: " + (err.message || err.name || err);
       }
     }
 
-    async function closeScanModal() {
-      if (scannerInstance) {
-        try { await scannerInstance.stop(); } catch (e) {}
-        try { scannerInstance.clear(); } catch (e) {}
-        scannerInstance = null;
+    function closeScanModal() {
+      if (scanRafId) { cancelAnimationFrame(scanRafId); scanRafId = null; }
+      if (scanStream) {
+        scanStream.getTracks().forEach((t) => t.stop());
+        scanStream = null;
       }
+      scanVideo.srcObject = null;
       scanModal.classList.remove("open");
     }
 
