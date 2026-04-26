@@ -517,6 +517,122 @@
     .icon-btn:active, .icon-btn:hover { background: #f3f4f6; color: var(--text); }
     .icon-btn.danger:active, .icon-btn.danger:hover { background: #fee2e2; color: var(--danger); }
 
+    /* ── User card / role badge ──────────────────────────── */
+    .user-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .user-card .avatar {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0d6efd, #6610f2);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .user-info { flex: 1; min-width: 0; }
+    .user-email {
+      font-weight: 600;
+      font-size: 0.95rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .user-meta {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 2px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .role-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .role-admin    { background: #fce7f3; color: #9d174d; }
+    .role-manager  { background: #dbeafe; color: #1e40af; }
+    .role-cashier  { background: #d1fae5; color: #065f46; }
+    .role-pending  { background: #fef3c7; color: #92400e; }
+
+    /* Checkbox + radio groups in modal */
+    .check-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: #fafbfc;
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.92rem;
+      cursor: pointer;
+      user-select: none;
+    }
+    .check-row input { width: 18px; height: 18px; cursor: pointer; }
+    .radio-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .radio-pill {
+      flex: 1;
+      min-width: 90px;
+      padding: 10px;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      background: #fff;
+      transition: all 0.1s;
+    }
+    .radio-pill input { display: none; }
+    .radio-pill.selected {
+      border-color: var(--primary);
+      background: rgba(13,110,253,0.08);
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .gen-pwd-btn {
+      margin-top: 6px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      color: var(--primary);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .pwd-display {
+      font-family: ui-monospace, monospace;
+      font-size: 0.82rem;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin-top: 8px;
+      word-break: break-all;
+    }
+
     /* Store selector */
     .store-selector {
       width: 100%;
@@ -692,6 +808,7 @@
     <nav class="tabs">
       <button class="tab-btn active" data-tab="stores">🏪 Καταστήματα</button>
       <button class="tab-btn" data-tab="employees">👷 Εργαζόμενοι</button>
+      <button class="tab-btn" data-tab="users" id="usersTabBtn" hidden>👥 Χρήστες</button>
     </nav>
 
     <main>
@@ -699,6 +816,12 @@
       <section id="storesTab">
         <button class="add-btn" id="addStoreBtn">+ Νέο Κατάστημα</button>
         <div class="list" id="storesList"></div>
+      </section>
+
+      <!-- Users tab -->
+      <section id="usersTab" hidden>
+        <button class="add-btn" id="addUserBtn">+ Νέος Χρήστης</button>
+        <div class="list" id="usersList"></div>
       </section>
 
       <!-- Employees tab -->
@@ -754,6 +877,58 @@
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="cancelBtn">Άκυρο</button>
           <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- User modal (add/edit) -->
+  <div class="modal" id="userModal">
+    <div class="modal-content">
+      <h2 id="userModalTitle">Νέος Χρήστης</h2>
+      <form id="userForm">
+        <div class="form-group">
+          <label for="userEmailInput">Email *</label>
+          <input type="email" id="userEmailInput" required autocomplete="off" />
+        </div>
+        <div class="form-group" id="userPasswordGroup">
+          <label for="userPasswordInput">Αρχικός κωδικός *</label>
+          <input type="text" id="userPasswordInput" required minlength="6" autocomplete="new-password" />
+          <button type="button" class="gen-pwd-btn" id="genPwdBtn">🎲 Auto-generate</button>
+          <div class="hint" style="margin-top:6px;">Δώσε τον κωδικό στον χρήστη — μπορεί να τον αλλάξει.</div>
+        </div>
+        <div class="form-group">
+          <label for="userNameInput">Όνομα (προαιρετικό)</label>
+          <input type="text" id="userNameInput" maxlength="100" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label>Ρόλος</label>
+          <div class="radio-group" id="roleGroup">
+            <label class="radio-pill" data-role="cashier"><input type="radio" name="role" value="cashier"> 💰 Ταμίας</label>
+            <label class="radio-pill" data-role="manager"><input type="radio" name="role" value="manager"> 🧑‍💼 Υπεύθυνος</label>
+            <label class="radio-pill" data-role="admin"><input type="radio" name="role" value="admin"> 👑 Admin</label>
+          </div>
+        </div>
+        <div class="form-group" id="storesGroup">
+          <label>Καταστήματα</label>
+          <div class="check-group" id="userStoresGroup">
+            <div class="hint">Πρόσθεσε πρώτα καταστήματα στο tab «Καταστήματα».</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Δικαιώματα</label>
+          <div class="check-group">
+            <label class="check-row"><input type="checkbox" id="permView"> 👁️ Βλέπει εργαζόμενους</label>
+            <label class="check-row"><input type="checkbox" id="permShowQR"> 📱 Εμφανίζει QR</label>
+            <label class="check-row"><input type="checkbox" id="permScanQR"> 📷 Σαρώνει νέα QR</label>
+            <label class="check-row"><input type="checkbox" id="permAdd"> ➕ Προσθέτει εργαζόμενους</label>
+            <label class="check-row"><input type="checkbox" id="permEdit"> ✏️ Επεξεργάζεται εργαζόμενους</label>
+            <label class="check-row"><input type="checkbox" id="permDelete"> 🗑️ Διαγράφει εργαζόμενους</label>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="userCancelBtn">Άκυρο</button>
+          <button type="submit" class="btn btn-primary" id="userSaveBtn">Αποθήκευση</button>
         </div>
       </form>
     </div>
@@ -828,7 +1003,19 @@
     const auth = firebase.auth();
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
+    // Secondary app: used by admin to create new users without logging out
+    const secondaryApp  = firebase.initializeApp(firebaseConfig, "secondary");
+    const secondaryAuth = secondaryApp.auth();
+    secondaryAuth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+
     const BOOTSTRAP_ADMIN_EMAIL = "siklas44@gmail.com";
+
+    const PERM_KEYS = ["viewEmployees","showQR","scanQR","addEmployees","editEmployees","deleteEmployees"];
+    const PERM_DEFAULTS = {
+      cashier: { viewEmployees:true,  showQR:true,  scanQR:false, addEmployees:false, editEmployees:false, deleteEmployees:false },
+      manager: { viewEmployees:true,  showQR:true,  scanQR:true,  addEmployees:true,  editEmployees:true,  deleteEmployees:true  },
+      admin:   { viewEmployees:true,  showQR:true,  scanQR:true,  addEmployees:true,  editEmployees:true,  deleteEmployees:true  },
+    };
 
     // ── DOM refs ─────────────────────────────────────────────────────
     const $ = (id) => document.getElementById(id);
@@ -881,6 +1068,29 @@
     const scanStatusEl    = $("scanStatus");
     const scanLogEl       = $("scanLog");
     const scanCloseBtn    = $("scanCloseBtn");
+    // Users tab
+    const usersTabBtn   = $("usersTabBtn");
+    const usersTab      = $("usersTab");
+    const usersListEl   = $("usersList");
+    const addUserBtn    = $("addUserBtn");
+    const userModal     = $("userModal");
+    const userModalTitle= $("userModalTitle");
+    const userForm      = $("userForm");
+    const userEmailInput= $("userEmailInput");
+    const userPasswordGroup = $("userPasswordGroup");
+    const userPasswordInput = $("userPasswordInput");
+    const userNameInput = $("userNameInput");
+    const roleGroup     = $("roleGroup");
+    const userStoresGroup = $("userStoresGroup");
+    const userCancelBtn = $("userCancelBtn");
+    const userSaveBtn   = $("userSaveBtn");
+    const genPwdBtn     = $("genPwdBtn");
+    const permView      = $("permView");
+    const permShowQR    = $("permShowQR");
+    const permScanQR    = $("permScanQR");
+    const permAdd       = $("permAdd");
+    const permEdit      = $("permEdit");
+    const permDelete    = $("permDelete");
     // QR screen
     const qrScreen      = $("qrScreen");
     const qrClose       = $("qrClose");
@@ -894,9 +1104,12 @@
     // ── State ────────────────────────────────────────────────────────
     let stores = [];
     let employees = [];
+    let users = [];
     let currentStoreId = null;
+    let currentUserDoc = null; // /users/{uid} doc of the currently signed-in user
     let editingStoreId = null;     // null = add mode, otherwise edit
     let editingEmployeeId = null;  // null = add mode, otherwise edit
+    let editingUserId  = null;     // null = add mode, otherwise edit
     let qrInstance = null;
 
     // ── Helpers ──────────────────────────────────────────────────────
@@ -1046,6 +1259,7 @@
     function stopAllListeners() {
       if (storesUnsub) { storesUnsub(); storesUnsub = null; }
       if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
+      stopUsersListener();
       stores = [];
       employees = [];
       currentStoreId = null;
@@ -1135,6 +1349,233 @@
       } catch (err) {
         console.error("deleteEmployee failed:", err);
         showToast("Σφάλμα κατά τη διαγραφή");
+      }
+    }
+
+    // ── Users (admin only) ───────────────────────────────────────────
+    let usersUnsub = null;
+
+    function roleLabel(role) {
+      return role === "admin"   ? "Admin"
+           : role === "manager" ? "Υπεύθυνος"
+           : role === "cashier" ? "Ταμίας"
+           : "Σε αναμονή";
+    }
+    function roleClass(role) {
+      return role === "admin"   ? "role-admin"
+           : role === "manager" ? "role-manager"
+           : role === "cashier" ? "role-cashier"
+           : "role-pending";
+    }
+
+    function renderUsers() {
+      if (users.length === 0) {
+        usersListEl.innerHTML = `<div class="empty"><p>Δεν υπάρχουν χρήστες ακόμα.</p></div>`;
+        return;
+      }
+      const me = auth.currentUser ? auth.currentUser.uid : null;
+      usersListEl.innerHTML = users.map((u) => {
+        const storeNames = (u.storeIds || [])
+          .map((sid) => stores.find((s) => s.id === sid))
+          .filter(Boolean)
+          .map((s) => escapeHtml(s.name))
+          .join(", ");
+        const isMe = u.id === me;
+        return `
+        <div class="user-card" data-id="${u.id}">
+          <div class="avatar">${escapeHtml(initials((u.name || u.email || "?")))}</div>
+          <div class="user-info">
+            <div class="user-email">${escapeHtml(u.email || "")} ${isMe ? "<small>(εσύ)</small>" : ""}</div>
+            <div class="user-meta">
+              <span class="role-badge ${roleClass(u.role)}">${roleLabel(u.role)}</span>
+              ${storeNames ? `<span>${storeNames}</span>` : (u.role === "admin" ? "<span>(όλα)</span>" : "")}
+            </div>
+          </div>
+          <button class="icon-btn" data-edit-user="${u.id}" aria-label="Επεξεργασία">✏️</button>
+          ${isMe ? "" : `<button class="icon-btn danger" data-del-user="${u.id}" aria-label="Διαγραφή">🗑️</button>`}
+        </div>`;
+      }).join("");
+    }
+
+    function startUsersListener() {
+      if (usersUnsub) return;
+      usersUnsub = db.collection("users")
+        .onSnapshot(
+          (snap) => {
+            users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            // Sort: admin → manager → cashier → pending; then email
+            const order = { admin: 0, manager: 1, cashier: 2 };
+            users.sort((a, b) => {
+              const ra = order[a.role] ?? 3;
+              const rb = order[b.role] ?? 3;
+              if (ra !== rb) return ra - rb;
+              return (a.email || "").localeCompare(b.email || "");
+            });
+            renderUsers();
+          },
+          (err) => {
+            console.error("users listener error:", err);
+            showToast("Σφάλμα φόρτωσης χρηστών");
+          }
+        );
+    }
+    function stopUsersListener() {
+      if (usersUnsub) { usersUnsub(); usersUnsub = null; users = []; }
+    }
+
+    // ── User modal ───────────────────────────────────────────────────
+    function setRolePill(role) {
+      roleGroup.querySelectorAll(".radio-pill").forEach((p) => {
+        const sel = p.dataset.role === role;
+        p.classList.toggle("selected", sel);
+        const input = p.querySelector("input");
+        if (input) input.checked = sel;
+      });
+      // Apply permission defaults
+      const def = PERM_DEFAULTS[role] || PERM_DEFAULTS.cashier;
+      permView.checked   = def.viewEmployees;
+      permShowQR.checked = def.showQR;
+      permScanQR.checked = def.scanQR;
+      permAdd.checked    = def.addEmployees;
+      permEdit.checked   = def.editEmployees;
+      permDelete.checked = def.deleteEmployees;
+    }
+
+    function getSelectedRole() {
+      const sel = roleGroup.querySelector(".radio-pill.selected");
+      return sel ? sel.dataset.role : null;
+    }
+
+    function renderStoreCheckboxes(selectedIds) {
+      if (stores.length === 0) {
+        userStoresGroup.innerHTML = `<div class="hint">Πρόσθεσε πρώτα καταστήματα στο tab «Καταστήματα».</div>`;
+        return;
+      }
+      userStoresGroup.innerHTML = stores.map((s) => `
+        <label class="check-row">
+          <input type="checkbox" value="${s.id}" ${selectedIds.includes(s.id) ? "checked" : ""}>
+          ${escapeHtml(s.name || "")}
+        </label>
+      `).join("");
+    }
+
+    function getSelectedStoreIds() {
+      return Array.from(userStoresGroup.querySelectorAll('input[type="checkbox"]:checked'))
+        .map((cb) => cb.value);
+    }
+
+    function generatePassword() {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+      let out = "";
+      for (let i = 0; i < 10; i++) {
+        out += chars[Math.floor(Math.random() * chars.length)];
+      }
+      return out;
+    }
+
+    function openUserModal(userId) {
+      editingUserId = userId || null;
+      userForm.reset();
+      if (userId) {
+        const u = users.find((x) => x.id === userId);
+        if (!u) return;
+        userModalTitle.textContent = "Επεξεργασία Χρήστη";
+        userEmailInput.value = u.email || "";
+        userEmailInput.disabled = true;
+        userPasswordGroup.hidden = true;
+        userNameInput.value = u.name || "";
+        setRolePill(u.role || "cashier");
+        // restore actual perms (override defaults)
+        const p = u.permissions || {};
+        permView.checked   = !!p.viewEmployees;
+        permShowQR.checked = !!p.showQR;
+        permScanQR.checked = !!p.scanQR;
+        permAdd.checked    = !!p.addEmployees;
+        permEdit.checked   = !!p.editEmployees;
+        permDelete.checked = !!p.deleteEmployees;
+        renderStoreCheckboxes(u.storeIds || []);
+      } else {
+        userModalTitle.textContent = "Νέος Χρήστης";
+        userEmailInput.disabled = false;
+        userPasswordGroup.hidden = false;
+        userPasswordInput.value = generatePassword();
+        setRolePill("cashier");
+        renderStoreCheckboxes([]);
+      }
+      userModal.classList.add("open");
+      setTimeout(() => userEmailInput.focus(), 100);
+    }
+    function closeUserModal() {
+      userModal.classList.remove("open");
+      editingUserId = null;
+    }
+
+    async function saveUser(formData) {
+      const { email, password, name, role, storeIds, permissions } = formData;
+      if (!role) { showToast("Διάλεξε ρόλο"); return; }
+
+      try {
+        if (editingUserId) {
+          // Update existing: only role/name/storeIds/permissions
+          await db.collection("users").doc(editingUserId).update({
+            name: name || null,
+            role,
+            storeIds: role === "admin" ? [] : storeIds,
+            permissions,
+          });
+          showToast("Ο χρήστης ενημερώθηκε");
+        } else {
+          // Create: secondary auth → user doc in Firestore
+          if (!email || !password) { showToast("Συμπλήρωσε email + κωδικό"); return; }
+          let cred;
+          try {
+            cred = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+          } catch (err) {
+            console.error("createUser failed:", err);
+            const map = {
+              "auth/email-already-in-use": "Υπάρχει ήδη λογαριασμός με αυτό το email.",
+              "auth/invalid-email": "Μη έγκυρο email.",
+              "auth/weak-password": "Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες.",
+            };
+            showToast(map[err.code] || ("Σφάλμα: " + (err.code || err.message)));
+            return;
+          }
+          const newUid = cred.user.uid;
+          await db.collection("users").doc(newUid).set({
+            email,
+            role,
+            name: name || null,
+            storeIds: role === "admin" ? [] : storeIds,
+            permissions,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdBy: auth.currentUser ? auth.currentUser.uid : null,
+          });
+          // Sign out from secondary so admin remains primary user
+          try { await secondaryAuth.signOut(); } catch (e) {}
+          showToast("Ο χρήστης δημιουργήθηκε");
+        }
+        closeUserModal();
+      } catch (err) {
+        console.error("saveUser failed:", err);
+        showToast("Σφάλμα: " + (err.code || err.message));
+      }
+    }
+
+    async function deleteUser(uid) {
+      const u = users.find((x) => x.id === uid);
+      if (!u) return;
+      if (!confirm(
+        `Διαγραφή του χρήστη «${u.email}»;\n\n` +
+        `Σημείωση: αυτό αφαιρεί τα δικαιώματά του από την εφαρμογή. ` +
+        `Ο λογαριασμός Auth παραμένει — αν θες να τον διαγράψεις εντελώς, ` +
+        `πήγαινε στο Firebase Console → Authentication.`
+      )) return;
+      try {
+        await db.collection("users").doc(uid).delete();
+        showToast("Ο χρήστης διαγράφηκε");
+      } catch (err) {
+        console.error("deleteUser failed:", err);
+        showToast("Σφάλμα: " + (err.code || err.message));
       }
     }
 
@@ -1492,8 +1933,48 @@
       tabBtns.forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
       storesTab.hidden    = (name !== "stores");
       employeesTab.hidden = (name !== "employees");
+      usersTab.hidden     = (name !== "users");
     }
     tabBtns.forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+    // ── Events: users tab ────────────────────────────────────────────
+    addUserBtn.addEventListener("click", () => openUserModal());
+    userCancelBtn.addEventListener("click", closeUserModal);
+    userModal.addEventListener("click", (e) => { if (e.target === userModal) closeUserModal(); });
+    genPwdBtn.addEventListener("click", () => { userPasswordInput.value = generatePassword(); });
+    roleGroup.addEventListener("click", (e) => {
+      const pill = e.target.closest(".radio-pill");
+      if (pill) setRolePill(pill.dataset.role);
+    });
+    usersListEl.addEventListener("click", (e) => {
+      const delBtn = e.target.closest("[data-del-user]");
+      if (delBtn) { e.stopPropagation(); deleteUser(delBtn.dataset.delUser); return; }
+      const editBtn = e.target.closest("[data-edit-user]");
+      if (editBtn) { e.stopPropagation(); openUserModal(editBtn.dataset.editUser); return; }
+    });
+    userForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      userSaveBtn.disabled = true;
+      try {
+        await saveUser({
+          email: userEmailInput.value.trim(),
+          password: userPasswordInput.value,
+          name: userNameInput.value.trim(),
+          role: getSelectedRole(),
+          storeIds: getSelectedStoreIds(),
+          permissions: {
+            viewEmployees:   permView.checked,
+            showQR:          permShowQR.checked,
+            scanQR:          permScanQR.checked,
+            addEmployees:    permAdd.checked,
+            editEmployees:   permEdit.checked,
+            deleteEmployees: permDelete.checked,
+          },
+        });
+      } finally {
+        userSaveBtn.disabled = false;
+      }
+    });
 
     // ── Events: store form / list ────────────────────────────────────
     addStoreBtn.addEventListener("click", () => openStoreModal());
@@ -1582,6 +2063,7 @@
         if (qrScreen.classList.contains("open")) closeQr();
         else if (scanModal.classList.contains("open")) closeScanModal();
         else if (importModal.classList.contains("open")) closeImportModal();
+        else if (userModal.classList.contains("open")) closeUserModal();
         else if (storeModal.classList.contains("open")) closeStoreModal();
         else if (addModal.classList.contains("open")) closeAddModal();
       }
@@ -1684,6 +2166,8 @@
       if (!user) {
         stopAllListeners();
         userEmailEl.textContent = "";
+        usersTabBtn.hidden = true;
+        currentUserDoc = null;
         setAuthMode("login");
         showOnly(loginView);
         return;
@@ -1721,10 +2205,16 @@
       }
 
       const data = userDoc.data() || {};
+      currentUserDoc = data;
       if (data.role === "admin") {
+        usersTabBtn.hidden = false;
         showOnly(appView);
         switchTab("stores");
         startStoresListener();
+        startUsersListener();
+      } else if (data.role === "manager" || data.role === "cashier") {
+        // Phase 2B will render proper non-admin views — for now show pending
+        showOnly(pendingView);
       } else {
         showOnly(pendingView);
       }
