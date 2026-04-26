@@ -12,51 +12,80 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function userRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function isAdmin() {
-      return signedIn() && userExists() && userRole() == 'admin';
+      return signedIn() && userExists() && userDoc().role == 'admin';
     }
 
-    // Bootstrap admin: μπορεί να δημιουργήσει το δικό του user doc
-    // ως admin κατά την πρώτη εγγραφή. Μετά μπαίνει στους κανόνες isAdmin().
     function isBootstrapAdmin() {
       return signedIn() && request.auth.token.email == 'siklas44@gmail.com';
     }
 
+    function hasStore(storeId) {
+      return signedIn() && userExists()
+        && userDoc().storeIds is list
+        && storeId in userDoc().storeIds;
+    }
+
+    function hasPermission(perm) {
+      return signedIn() && userExists()
+        && userDoc().permissions is map
+        && userDoc().permissions[perm] == true;
+    }
+
     // ─── /users/{uid} ─────────────────────────────────────────
     match /users/{uid} {
-      // Διαβάζει: τον εαυτό του ή ο admin
+      // Read: own doc OR admin
       allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
 
-      // Δημιουργία (signup):
-      //  - bootstrap admin (siklas44@gmail.com) → role=admin
-      //  - οποιοσδήποτε άλλος → role=null (αναμονή έγκρισης)
-      allow create: if signedIn()
-        && request.auth.uid == uid
-        && request.resource.data.email == request.auth.token.email
-        && (
-          (isBootstrapAdmin() && request.resource.data.role == 'admin') ||
-          (!isBootstrapAdmin() && request.resource.data.role == null)
-        );
+      // Create:
+      //  - admin can create any user doc (admin-creates-user flow)
+      //  - bootstrap admin self-creates as admin
+      //  - other emails self-create with role=null (pending)
+      allow create: if signedIn() && (
+        isAdmin() ||
+        (request.auth.uid == uid
+         && request.resource.data.email == request.auth.token.email
+         && (
+           (isBootstrapAdmin() && request.resource.data.role == 'admin') ||
+           (!isBootstrapAdmin() && request.resource.data.role == null)
+         ))
+      );
 
-      // Update / delete: μόνο admin
+      // Update / delete: admin only
       allow update, delete: if isAdmin();
     }
 
     // ─── /stores/{storeId} ────────────────────────────────────
     match /stores/{storeId} {
-      allow read, write: if isAdmin();
+      // Read: admin OR user assigned to this store
+      allow read: if isAdmin() || hasStore(storeId);
+      // Write (CRUD stores): admin only
+      allow write: if isAdmin();
 
       // Employees subcollection
       match /employees/{empId} {
-        allow read, write: if isAdmin();
+        // Read: admin OR (assigned + viewEmployees permission)
+        allow read: if isAdmin() ||
+          (hasStore(storeId) && hasPermission('viewEmployees'));
+
+        // Create: admin OR (assigned + addEmployees)
+        allow create: if isAdmin() ||
+          (hasStore(storeId) && hasPermission('addEmployees'));
+
+        // Update: admin OR (assigned + editEmployees)
+        allow update: if isAdmin() ||
+          (hasStore(storeId) && hasPermission('editEmployees'));
+
+        // Delete: admin OR (assigned + deleteEmployees)
+        allow delete: if isAdmin() ||
+          (hasStore(storeId) && hasPermission('deleteEmployees'));
       }
     }
 
-    // Όλα τα υπόλοιπα paths: deny by default (default Firestore behavior).
-    // Αυτό κλείνει αυτόματα και το παλιό /employees top-level collection.
+    // Default: everything else denied
   }
 }
