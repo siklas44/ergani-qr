@@ -1492,9 +1492,18 @@
       currentStoreId = storeId || null;
       if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
       employees = [];
-      addBtn.disabled = !currentStoreId;
-      importBtn.disabled = !currentStoreId;
-      scanBtn.disabled = !currentStoreId;
+      // Hide all employee-related UI when no store is selected
+      const noStore = !currentStoreId;
+      const searchBox = searchEl.closest(".search-box");
+      if (searchBox) searchBox.hidden = noStore;
+      addBtn.disabled = noStore;
+      importBtn.disabled = noStore;
+      scanBtn.disabled = noStore;
+      // Also hide entirely (not just disable) for cleaner UX
+      addBtn.style.display    = noStore ? "none" : "";
+      importBtn.style.display = noStore ? "none" : "";
+      scanBtn.style.display   = noStore ? "none" : "";
+      if (noStore) searchEl.value = "";
       if (!currentStoreId) {
         renderEmployees();
         return;
