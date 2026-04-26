@@ -2316,19 +2316,27 @@
 
       if (!userDoc.exists) {
         const isBootstrap = (user.email || "").toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
-        try {
-          await userRef.set({
-            email: user.email,
-            role: isBootstrap ? "admin" : null,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          });
-        } catch (err) {
-          console.error("users.set failed:", err);
+        if (isBootstrap) {
+          try {
+            await userRef.set({
+              email: user.email,
+              role: "admin",
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch (err) {
+            console.error("bootstrap admin set failed:", err);
+            showOnly(loginView);
+            showAuthError("Σφάλμα δημιουργίας admin: " + (err.code || err.message));
+            return;
+          }
+          userDoc = await userRef.get();
+        } else {
+          // No user doc and not bootstrap admin → not authorized. Sign out cleanly.
+          await auth.signOut();
           showOnly(loginView);
-          showAuthError("Σφάλμα δημιουργίας λογαριασμού: " + (err.code || err.message));
+          showAuthError("Ο λογαριασμός δεν είναι ενεργός. Επικοινώνησε με τον διαχειριστή.");
           return;
         }
-        userDoc = await userRef.get();
       }
 
       const data = userDoc.data() || {};
