@@ -926,6 +926,7 @@
             <label class="check-row"><input type="checkbox" id="permDelete"> 🗑️ Διαγράφει εργαζόμενους</label>
           </div>
         </div>
+        <div class="auth-error" id="userError" style="margin-top:8px;"></div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="userCancelBtn">Άκυρο</button>
           <button type="submit" class="btn btn-primary" id="userSaveBtn">Αποθήκευση</button>
@@ -1091,6 +1092,7 @@
     const permAdd       = $("permAdd");
     const permEdit      = $("permEdit");
     const permDelete    = $("permDelete");
+    const userErrorEl   = $("userError");
     // QR screen
     const qrScreen      = $("qrScreen");
     const qrClose       = $("qrClose");
@@ -1474,6 +1476,7 @@
     }
 
     function openUserModal(userId) {
+      hideUserError();
       editingUserId = userId || null;
       userForm.reset();
       if (userId) {
@@ -1510,13 +1513,22 @@
       editingUserId = null;
     }
 
-    async function saveUser(formData) {
-      const { email, password, name, role, storeIds, permissions } = formData;
-      if (!role) { showToast("Διάλεξε ρόλο"); return; }
+    function showUserError(msg) {
+      userErrorEl.textContent = msg;
+      userErrorEl.classList.add("show");
+    }
+    function hideUserError() {
+      userErrorEl.classList.remove("show");
+      userErrorEl.textContent = "";
+    }
 
-      try {
-        if (editingUserId) {
-          // Update existing: only role/name/storeIds/permissions
+    async function saveUser(formData) {
+      hideUserError();
+      const { email, password, name, role, storeIds, permissions } = formData;
+      if (!role) { showUserError("Διάλεξε ρόλο"); return; }
+
+      if (editingUserId) {
+        try {
           await db.collection("users").doc(editingUserId).update({
             name: name || null,
             role,
@@ -1524,41 +1536,56 @@
             permissions,
           });
           showToast("Ο χρήστης ενημερώθηκε");
-        } else {
-          // Create: secondary auth → user doc in Firestore
-          if (!email || !password) { showToast("Συμπλήρωσε email + κωδικό"); return; }
-          let cred;
-          try {
-            cred = await secondaryAuth.createUserWithEmailAndPassword(email, password);
-          } catch (err) {
-            console.error("createUser failed:", err);
-            const map = {
-              "auth/email-already-in-use": "Υπάρχει ήδη λογαριασμός με αυτό το email.",
-              "auth/invalid-email": "Μη έγκυρο email.",
-              "auth/weak-password": "Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες.",
-            };
-            showToast(map[err.code] || ("Σφάλμα: " + (err.code || err.message)));
-            return;
-          }
-          const newUid = cred.user.uid;
-          await db.collection("users").doc(newUid).set({
-            email,
-            role,
-            name: name || null,
-            storeIds: role === "admin" ? [] : storeIds,
-            permissions,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            createdBy: auth.currentUser ? auth.currentUser.uid : null,
-          });
-          // Sign out from secondary so admin remains primary user
-          try { await secondaryAuth.signOut(); } catch (e) {}
-          showToast("Ο χρήστης δημιουργήθηκε");
+          closeUserModal();
+        } catch (err) {
+          console.error("update user failed:", err);
+          showUserError("Σφάλμα ενημέρωσης: " + (err.code || err.message));
         }
-        closeUserModal();
-      } catch (err) {
-        console.error("saveUser failed:", err);
-        showToast("Σφάλμα: " + (err.code || err.message));
+        return;
       }
+
+      // CREATE flow
+      if (!email || !password) { showUserError("Συμπλήρωσε email + κωδικό"); return; }
+
+      let cred;
+      try {
+        cred = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+      } catch (err) {
+        console.error("createUser auth failed:", err);
+        const map = {
+          "auth/email-already-in-use": "Υπάρχει ήδη λογαριασμός με αυτό το email.",
+          "auth/invalid-email": "Μη έγκυρο email.",
+          "auth/weak-password": "Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες.",
+          "auth/operation-not-allowed": "Email/Password auth δεν είναι ενεργό στο Firebase Console.",
+        };
+        showUserError(map[err.code] || ("Σφάλμα Auth: " + (err.code || err.message)));
+        return;
+      }
+
+      const newUid = cred.user.uid;
+      try {
+        await db.collection("users").doc(newUid).set({
+          email,
+          role,
+          name: name || null,
+          storeIds: role === "admin" ? [] : storeIds,
+          permissions,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: auth.currentUser ? auth.currentUser.uid : null,
+        });
+      } catch (err) {
+        console.error("write user doc failed:", err);
+        showUserError(
+          "Ο λογαριασμός Auth δημιουργήθηκε αλλά το Firestore αρνήθηκε: " +
+          (err.code || err.message) +
+          ". Έλεγξε αν έκανες Publish τους νέους rules στο Firebase Console."
+        );
+        try { await secondaryAuth.signOut(); } catch (e) {}
+        return;
+      }
+      try { await secondaryAuth.signOut(); } catch (e) {}
+      showToast("Ο χρήστης δημιουργήθηκε");
+      closeUserModal();
     }
 
     async function deleteUser(uid) {
