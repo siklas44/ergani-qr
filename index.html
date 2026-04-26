@@ -1514,12 +1514,30 @@
     }
 
     function showUserError(msg) {
-      userErrorEl.textContent = msg;
+      userErrorEl.innerHTML = escapeHtml(msg);
       userErrorEl.classList.add("show");
+    }
+    function showResetForExistingEmail(email) {
+      userErrorEl.innerHTML =
+        `Το email <strong>${escapeHtml(email)}</strong> υπάρχει ήδη με <strong>διαφορετικό κωδικό</strong>.<br><br>
+         Πάτα το παρακάτω για να σταλεί email reset link στον χρήστη — μετά που ορίσει νέο κωδικό, ξανα-βάλε εδώ τον ίδιο κωδικό.<br>
+         <button type="button" id="userResetBtn" class="btn btn-primary" style="margin-top:8px;">📧 Στείλε reset link στο ${escapeHtml(email)}</button>`;
+      userErrorEl.classList.add("show");
+      const btn = document.getElementById("userResetBtn");
+      if (btn) btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        btn.textContent = "Αποστολή...";
+        try {
+          await auth.sendPasswordResetEmail(email);
+          userErrorEl.innerHTML = `✅ Στάλθηκε email reset στο <strong>${escapeHtml(email)}</strong>. Όταν ορίσει νέο κωδικό, ξανα-πάτα Αποθήκευση εδώ με τον νέο κωδικό.`;
+        } catch (err) {
+          showUserError("Σφάλμα αποστολής: " + (err.code || err.message));
+        }
+      });
     }
     function hideUserError() {
       userErrorEl.classList.remove("show");
-      userErrorEl.textContent = "";
+      userErrorEl.innerHTML = "";
     }
 
     async function saveUser(formData) {
@@ -1547,19 +1565,36 @@
       // CREATE flow
       if (!email || !password) { showUserError("Συμπλήρωσε email + κωδικό"); return; }
 
+      // CREATE flow — try to make a brand-new auth account.
+      // If the email already exists, attempt a sign-in with the given password
+      // (handy when admin re-adds someone they previously deleted from Firestore).
       let cred;
       try {
         cred = await secondaryAuth.createUserWithEmailAndPassword(email, password);
       } catch (err) {
-        console.error("createUser auth failed:", err);
-        const map = {
-          "auth/email-already-in-use": "Υπάρχει ήδη λογαριασμός με αυτό το email.",
-          "auth/invalid-email": "Μη έγκυρο email.",
-          "auth/weak-password": "Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες.",
-          "auth/operation-not-allowed": "Email/Password auth δεν είναι ενεργό στο Firebase Console.",
-        };
-        showUserError(map[err.code] || ("Σφάλμα Auth: " + (err.code || err.message)));
-        return;
+        if (err.code === "auth/email-already-in-use") {
+          try {
+            cred = await secondaryAuth.signInWithEmailAndPassword(email, password);
+            showToast("Email υπήρχε ήδη — έγινε σύνδεση με τον κωδικό που έδωσες");
+          } catch (signErr) {
+            console.error("re-add sign-in failed:", signErr);
+            if (signErr.code === "auth/wrong-password" || signErr.code === "auth/invalid-credential" || signErr.code === "auth/invalid-login-credentials") {
+              showResetForExistingEmail(email);
+            } else {
+              showUserError("Σφάλμα Auth: " + (signErr.code || signErr.message));
+            }
+            return;
+          }
+        } else {
+          console.error("createUser auth failed:", err);
+          const map = {
+            "auth/invalid-email": "Μη έγκυρο email.",
+            "auth/weak-password": "Ο κωδικός πρέπει να έχει τουλάχιστον 6 χαρακτήρες.",
+            "auth/operation-not-allowed": "Email/Password auth δεν είναι ενεργό στο Firebase Console.",
+          };
+          showUserError(map[err.code] || ("Σφάλμα Auth: " + (err.code || err.message)));
+          return;
+        }
       }
 
       const newUid = cred.user.uid;
