@@ -533,6 +533,55 @@
       box-shadow: 0 0 0 3px rgba(13,110,253,0.15);
     }
 
+    /* ── Bulk import ──────────────────────────────────────── */
+    .secondary-btn {
+      width: 100%;
+      padding: 12px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--primary);
+      background: transparent;
+      border: 1px dashed var(--primary);
+      border-radius: 12px;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: background 0.15s;
+    }
+    .secondary-btn:active { background: rgba(13,110,253,0.08); }
+    .secondary-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .modal-content textarea {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      resize: vertical;
+      min-height: 140px;
+      outline: none;
+    }
+    .modal-content textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(13,110,253,0.15);
+    }
+    .hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .import-preview {
+      background: #f9fafb;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      margin-top: 12px;
+      min-height: 24px;
+    }
+    .import-preview strong { color: var(--text); }
+
     /* View visibility toggle */
     [hidden] { display: none !important; }
   </style>
@@ -616,6 +665,7 @@
           <input type="search" id="search" placeholder="Αναζήτηση εργαζόμενου..." autocomplete="off" />
         </div>
         <button class="add-btn" id="addBtn" disabled>+ Προσθήκη Εργαζόμενου</button>
+        <button class="secondary-btn" id="importBtn" disabled>📥 Μαζική εισαγωγή από Excel/CSV</button>
         <div class="list" id="list"></div>
       </section>
     </main>
@@ -660,6 +710,29 @@
           <button type="submit" class="btn btn-primary">Αποθήκευση</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Bulk import modal -->
+  <div class="modal" id="importModal">
+    <div class="modal-content">
+      <h2>Μαζική εισαγωγή εργαζομένων</h2>
+      <p class="hint">
+        Αντίγραψε από Excel (2 στήλες: <strong>Όνομα</strong>, <strong>Κωδικός</strong>) και επικόλλησε εδώ.<br>
+        Ή ανέβασε αρχείο <strong>.csv</strong>. Οι ήδη υπάρχοντες εργαζόμενοι (ίδιος κωδικός) <strong>παραλείπονται</strong>.
+      </p>
+      <textarea id="importText" placeholder="Νίκος Παπαδόπουλος	ABC123&#10;Μαρία Γεωργίου	XYZ789&#10;..."></textarea>
+      <div class="form-group" style="margin-top:10px;">
+        <label for="importFile">Ή αρχείο CSV/TXT:</label>
+        <input type="file" id="importFile" accept=".csv,.txt,text/csv,text/plain" />
+      </div>
+      <div class="import-preview" id="importPreview">
+        Επικόλλησε γραμμές παραπάνω για προεπισκόπηση.
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="importCancelBtn">Άκυρο</button>
+        <button type="button" class="btn btn-primary" id="importDoBtn" disabled>Εισαγωγή</button>
+      </div>
     </div>
   </div>
 
@@ -730,6 +803,13 @@
     const nameInput     = $("name");
     const codeInput     = $("code");
     const empModalTitle = $("empModalTitle");
+    const importBtn       = $("importBtn");
+    const importModal     = $("importModal");
+    const importText      = $("importText");
+    const importFile      = $("importFile");
+    const importPreview   = $("importPreview");
+    const importCancelBtn = $("importCancelBtn");
+    const importDoBtn     = $("importDoBtn");
     // QR screen
     const qrScreen      = $("qrScreen");
     const qrClose       = $("qrClose");
@@ -870,6 +950,7 @@
       if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
       employees = [];
       addBtn.disabled = !currentStoreId;
+      importBtn.disabled = !currentStoreId;
       if (!currentStoreId) {
         renderEmployees();
         return;
@@ -983,6 +1064,96 @@
         showToast("Σφάλμα κατά τη διαγραφή");
       }
     }
+
+    // ── Bulk import: parse / preview / perform ───────────────────────
+    function parseImportText(text) {
+      const rows = [];
+      const errors = [];
+      text.split(/\r?\n/).forEach((raw, i) => {
+        const line = raw.trim();
+        if (!line) return;
+        // Excel paste = TAB-separated; CSV = comma-separated; allow either.
+        const parts = line.includes("\t") ? line.split("\t") : line.split(",");
+        const name = (parts[0] || "").trim();
+        const code = (parts[1] || "").trim();
+        if (!name || !code) {
+          errors.push({ line: i + 1, text: line });
+          return;
+        }
+        rows.push({ name, code });
+      });
+      return { rows, errors };
+    }
+
+    function previewImport() {
+      const { rows, errors } = parseImportText(importText.value);
+      const existingCodes = new Set(employees.map((e) => e.code));
+      const seen = new Set();
+      const newRows = [];
+      const dupes = [];
+      const inFile = [];
+      for (const r of rows) {
+        if (seen.has(r.code)) { inFile.push(r); continue; }
+        seen.add(r.code);
+        if (existingCodes.has(r.code)) dupes.push(r);
+        else newRows.push(r);
+      }
+      const lines = [];
+      lines.push(`<strong>${rows.length}</strong> γραμμές διαβάστηκαν`);
+      if (newRows.length)  lines.push(`✅ <strong>${newRows.length}</strong> νέοι θα προστεθούν`);
+      if (dupes.length)    lines.push(`⏭️ <strong>${dupes.length}</strong> υπάρχουν ήδη (παράκαμψη)`);
+      if (inFile.length)   lines.push(`⚠️ <strong>${inFile.length}</strong> διπλότυπα στο αρχείο (παράκαμψη)`);
+      if (errors.length)   lines.push(`❌ <strong>${errors.length}</strong> γραμμές με λάθος μορφή (παράκαμψη)`);
+      if (rows.length === 0 && errors.length === 0) {
+        importPreview.textContent = "Επικόλλησε γραμμές παραπάνω για προεπισκόπηση.";
+      } else {
+        importPreview.innerHTML = lines.join("<br>");
+      }
+      importDoBtn.disabled = newRows.length === 0;
+      importDoBtn.textContent = newRows.length > 0
+        ? `Εισαγωγή ${newRows.length} νέων`
+        : "Εισαγωγή";
+      return { newRows, dupes, errors };
+    }
+
+    async function performImport() {
+      if (!currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
+      const { newRows } = previewImport();
+      if (newRows.length === 0) return;
+      importDoBtn.disabled = true;
+      try {
+        const empCol = db.collection("stores").doc(currentStoreId).collection("employees");
+        const ts = firebase.firestore.FieldValue.serverTimestamp();
+        const uid = auth.currentUser ? auth.currentUser.uid : null;
+        // Firestore batch limit = 500 ops; chunk in safety margin of 400
+        for (let i = 0; i < newRows.length; i += 400) {
+          const chunk = newRows.slice(i, i + 400);
+          const batch = db.batch();
+          chunk.forEach((r) => {
+            const ref = empCol.doc();
+            batch.set(ref, { name: r.name, code: r.code, createdAt: ts, createdBy: uid });
+          });
+          await batch.commit();
+        }
+        showToast(`Προστέθηκαν ${newRows.length} εργαζόμενοι`);
+        closeImportModal();
+      } catch (err) {
+        console.error("import failed:", err);
+        showToast("Σφάλμα κατά την εισαγωγή");
+      } finally {
+        importDoBtn.disabled = false;
+      }
+    }
+
+    function openImportModal() {
+      if (!currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
+      importText.value = "";
+      importFile.value = "";
+      previewImport();
+      importModal.classList.add("open");
+      setTimeout(() => importText.focus(), 100);
+    }
+    function closeImportModal() { importModal.classList.remove("open"); }
 
     // ── Modal: store ─────────────────────────────────────────────────
     function openStoreModal(storeId) {
@@ -1099,6 +1270,20 @@
     storeSelector.addEventListener("change", (e) => setCurrentStore(e.target.value));
     searchEl.addEventListener("input", renderEmployees);
 
+    // Bulk import wiring
+    importBtn.addEventListener("click", openImportModal);
+    importCancelBtn.addEventListener("click", closeImportModal);
+    importModal.addEventListener("click", (e) => { if (e.target === importModal) closeImportModal(); });
+    importDoBtn.addEventListener("click", performImport);
+    importText.addEventListener("input", previewImport);
+    importFile.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => { importText.value = ev.target.result || ""; previewImport(); };
+      reader.readAsText(file, "UTF-8");
+    });
+
     listEl.addEventListener("click", (e) => {
       const delBtn = e.target.closest("[data-del-emp]");
       if (delBtn) { e.stopPropagation(); deleteEmployee(delBtn.dataset.delEmp); return; }
@@ -1118,6 +1303,7 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         if (qrScreen.classList.contains("open")) closeQr();
+        else if (importModal.classList.contains("open")) closeImportModal();
         else if (storeModal.classList.contains("open")) closeStoreModal();
         else if (addModal.classList.contains("open")) closeAddModal();
       }
