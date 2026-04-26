@@ -432,6 +432,103 @@
       margin-bottom: 20px;
     }
 
+    /* ── Tabs ─────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 9;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 14px 8px;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* ── Store card ───────────────────────────────────────── */
+    .store-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+      margin-bottom: 10px;
+    }
+    .store-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .store-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0d6efd, #6610f2);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .store-info { flex: 1; min-width: 0; }
+    .store-name { font-weight: 600; font-size: 1rem; }
+    .store-address {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .store-meta {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .store-actions {
+      display: flex;
+      gap: 4px;
+    }
+    .icon-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      padding: 6px;
+      cursor: pointer;
+      border-radius: 8px;
+      display: flex;
+    }
+    .icon-btn:active, .icon-btn:hover { background: #f3f4f6; color: var(--text); }
+    .icon-btn.danger:active, .icon-btn.danger:hover { background: #fee2e2; color: var(--danger); }
+
+    /* Store selector */
+    .store-selector {
+      width: 100%;
+      padding: 12px 14px;
+      font-size: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      margin-bottom: 12px;
+      outline: none;
+      cursor: pointer;
+    }
+    .store-selector:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(13,110,253,0.15);
+    }
+
     /* View visibility toggle */
     [hidden] { display: none !important; }
   </style>
@@ -485,29 +582,66 @@
 
   <!-- ── App view (admin) ───────────────────────────────────── -->
   <div id="appView" hidden>
-  <header>
-    <h1>Εργάνη QR</h1>
-    <div class="subtitle">Διαχείριση QR εργαζομένων</div>
-    <div class="user-badge">
-      <span class="email" id="userEmail"></span>
-      <button class="logout-btn" id="logoutBtn">Αποσύνδεση</button>
-    </div>
-    <div class="sync-status" id="syncStatus">⏳ Σύνδεση...</div>
-  </header>
+    <header>
+      <h1>Εργάνη QR</h1>
+      <div class="subtitle">Πίνακας διαχείρισης</div>
+      <div class="user-badge">
+        <span class="email" id="userEmail"></span>
+        <button class="logout-btn" id="logoutBtn">Αποσύνδεση</button>
+      </div>
+    </header>
 
-  <main>
-    <div class="search-box">
-      <input type="search" id="search" placeholder="Αναζήτηση εργαζόμενου..." autocomplete="off" />
-    </div>
-    <button class="add-btn" id="addBtn">+ Προσθήκη Εργαζόμενου</button>
-    <div class="list" id="list"></div>
-  </main>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="stores">🏪 Καταστήματα</button>
+      <button class="tab-btn" data-tab="employees">👷 Εργαζόμενοι</button>
+    </nav>
+
+    <main>
+      <!-- Stores tab -->
+      <section id="storesTab">
+        <button class="add-btn" id="addStoreBtn">+ Νέο Κατάστημα</button>
+        <div class="list" id="storesList"></div>
+      </section>
+
+      <!-- Employees tab -->
+      <section id="employeesTab" hidden>
+        <select class="store-selector" id="storeSelector">
+          <option value="">— Επίλεξε κατάστημα —</option>
+        </select>
+        <div class="search-box">
+          <input type="search" id="search" placeholder="Αναζήτηση εργαζόμενου..." autocomplete="off" />
+        </div>
+        <button class="add-btn" id="addBtn" disabled>+ Προσθήκη Εργαζόμενου</button>
+        <div class="list" id="list"></div>
+      </section>
+    </main>
   </div>
 
-  <!-- Add modal -->
+  <!-- Store modal (add/edit) -->
+  <div class="modal" id="storeModal">
+    <div class="modal-content">
+      <h2 id="storeModalTitle">Νέο Κατάστημα</h2>
+      <form id="storeForm">
+        <div class="form-group">
+          <label for="storeName">Όνομα καταστήματος *</label>
+          <input type="text" id="storeName" required maxlength="100" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="storeAddress">Διεύθυνση (προαιρετική)</label>
+          <input type="text" id="storeAddress" maxlength="200" autocomplete="off" />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="storeCancelBtn">Άκυρο</button>
+          <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Employee modal (add/edit) -->
   <div class="modal" id="addModal">
     <div class="modal-content">
-      <h2>Νέος Εργαζόμενος</h2>
+      <h2 id="empModalTitle">Νέος Εργαζόμενος</h2>
       <form id="addForm">
         <div class="form-group">
           <label for="name">Ονοματεπώνυμο</label>
@@ -550,7 +684,6 @@
     const db = firebase.firestore();
     const auth = firebase.auth();
     auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    const colRef = db.collection("employees");
 
     const BOOTSTRAP_ADMIN_EMAIL = "siklas44@gmail.com";
 
@@ -571,24 +704,44 @@
     const userEmailEl = $("userEmail");
     const logoutBtn   = $("logoutBtn");
     const pendingLogoutBtn = $("pendingLogoutBtn");
-    const listEl      = $("list");
-    const searchEl    = $("search");
-    const addBtn      = $("addBtn");
-    const addModal    = $("addModal");
-    const addForm     = $("addForm");
-    const cancelBtn   = $("cancelBtn");
-    const nameInput   = $("name");
-    const codeInput   = $("code");
-    const qrScreen    = $("qrScreen");
-    const qrClose     = $("qrClose");
-    const qrNameEl    = $("qrName");
-    const qrCodeEl    = $("qrcode");
-    const qrCodeText  = $("qrCodeText");
-    const toastEl     = $("toast");
-    const syncStatus  = $("syncStatus");
+    // Stores tab
+    const storesTab     = $("storesTab");
+    const storesListEl  = $("storesList");
+    const addStoreBtn   = $("addStoreBtn");
+    const storeModal    = $("storeModal");
+    const storeForm     = $("storeForm");
+    const storeNameInput= $("storeName");
+    const storeAddressInput = $("storeAddress");
+    const storeCancelBtn= $("storeCancelBtn");
+    const storeModalTitle = $("storeModalTitle");
+    // Employees tab
+    const employeesTab  = $("employeesTab");
+    const storeSelector = $("storeSelector");
+    const listEl        = $("list");
+    const searchEl      = $("search");
+    const addBtn        = $("addBtn");
+    const addModal      = $("addModal");
+    const addForm       = $("addForm");
+    const cancelBtn     = $("cancelBtn");
+    const nameInput     = $("name");
+    const codeInput     = $("code");
+    const empModalTitle = $("empModalTitle");
+    // QR screen
+    const qrScreen      = $("qrScreen");
+    const qrClose       = $("qrClose");
+    const qrNameEl      = $("qrName");
+    const qrCodeEl      = $("qrcode");
+    const qrCodeText    = $("qrCodeText");
+    const toastEl       = $("toast");
+    // Tabs
+    const tabBtns       = document.querySelectorAll(".tab-btn");
 
     // ── State ────────────────────────────────────────────────────────
+    let stores = [];
     let employees = [];
+    let currentStoreId = null;
+    let editingStoreId = null;     // null = add mode, otherwise edit
+    let editingEmployeeId = null;  // null = add mode, otherwise edit
     let qrInstance = null;
 
     // ── Helpers ──────────────────────────────────────────────────────
@@ -611,25 +764,51 @@
       showToast._t = setTimeout(() => toastEl.classList.remove("show"), 2000);
     }
 
-    // ── Render ───────────────────────────────────────────────────────
-    function render() {
+    // ── Render: stores list ──────────────────────────────────────────
+    function renderStores() {
+      if (stores.length === 0) {
+        storesListEl.innerHTML = `
+          <div class="empty">
+            <p>Δεν υπάρχουν καταστήματα.<br>Πάτησε «+ Νέο Κατάστημα» για να ξεκινήσεις.</p>
+          </div>`;
+        return;
+      }
+      storesListEl.innerHTML = stores.map((s) => `
+        <div class="store-card" data-id="${s.id}">
+          <div class="store-card-header">
+            <div class="store-icon">🏪</div>
+            <div class="store-info">
+              <div class="store-name">${escapeHtml(s.name || "")}</div>
+              ${s.address ? `<div class="store-address">${escapeHtml(s.address)}</div>` : ""}
+            </div>
+            <div class="store-actions">
+              <button class="icon-btn" data-edit-store="${s.id}" aria-label="Επεξεργασία">✏️</button>
+              <button class="icon-btn danger" data-del-store="${s.id}" aria-label="Διαγραφή">🗑️</button>
+            </div>
+          </div>
+        </div>`).join("");
+    }
+
+    // ── Render: employees list (current store) ───────────────────────
+    function renderEmployees() {
       const q = searchEl.value.trim().toLowerCase();
       const filtered = q
-        ? employees.filter((e) => e.name.toLowerCase().includes(q) || e.code.toLowerCase().includes(q))
+        ? employees.filter((e) => (e.name || "").toLowerCase().includes(q) || (e.code || "").toLowerCase().includes(q))
         : employees;
+
+      if (!currentStoreId) {
+        listEl.innerHTML = `
+          <div class="empty">
+            <p>Διάλεξε κατάστημα από πάνω για να δεις τους εργαζομένους.</p>
+          </div>`;
+        return;
+      }
 
       if (filtered.length === 0) {
         listEl.innerHTML = `
           <div class="empty">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <line x1="19" y1="8" x2="19" y2="14"/>
-              <line x1="22" y1="11" x2="16" y2="11"/>
-            </svg>
             <p>${employees.length === 0
-              ? "Δεν υπάρχουν εργαζόμενοι.<br>Πατήστε «Προσθήκη» για να ξεκινήσετε."
+              ? "Δεν υπάρχουν εργαζόμενοι.<br>Πάτησε «+ Προσθήκη» για να ξεκινήσεις."
               : "Δεν βρέθηκαν αποτελέσματα."}</p>
           </div>`;
         return;
@@ -637,78 +816,214 @@
 
       listEl.innerHTML = filtered.map((e) => `
         <div class="employee" data-id="${e.id}">
-          <div class="avatar">${escapeHtml(initials(e.name))}</div>
+          <div class="avatar">${escapeHtml(initials(e.name || "?"))}</div>
           <div class="employee-info">
-            <div class="employee-name">${escapeHtml(e.name)}</div>
-            <div class="employee-code">${escapeHtml(e.code)}</div>
+            <div class="employee-name">${escapeHtml(e.name || "")}</div>
+            <div class="employee-code">${escapeHtml(e.code || "")}</div>
           </div>
-          <button class="delete-btn" data-del="${e.id}" aria-label="Διαγραφή">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"
-                 fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-              <path d="M10 11v6"/><path d="M14 11v6"/>
-              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-            </svg>
-          </button>
+          <button class="icon-btn" data-edit-emp="${e.id}" aria-label="Επεξεργασία">✏️</button>
+          <button class="icon-btn danger" data-del-emp="${e.id}" aria-label="Διαγραφή">🗑️</button>
         </div>`).join("");
     }
 
-    // ── Firestore real-time listener (ξεκινάει μετά το admin auth) ───
-    let employeesUnsub = null;
-    function startEmployeesListener() {
-      if (employeesUnsub) return;
-      employeesUnsub = colRef.orderBy("createdAt", "desc").onSnapshot(
-        (snapshot) => {
-          employees = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-          syncStatus.textContent = "☁️ Συγχρονισμένο";
-          render();
-        },
-        (err) => {
-          syncStatus.textContent = "❌ Σφάλμα σύνδεσης";
-          console.error("Firestore error:", err);
-        }
-      );
-    }
-    function stopEmployeesListener() {
-      if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
+    // Update store dropdown in employees tab
+    function renderStoreSelector() {
+      const current = currentStoreId;
+      storeSelector.innerHTML =
+        `<option value="">— Επίλεξε κατάστημα —</option>` +
+        stores.map((s) =>
+          `<option value="${s.id}" ${s.id === current ? "selected" : ""}>${escapeHtml(s.name || "")}</option>`
+        ).join("");
+      // If currentStoreId no longer exists (deleted), reset
+      if (current && !stores.find((s) => s.id === current)) {
+        setCurrentStore(null);
+      }
     }
 
-    // ── CRUD ─────────────────────────────────────────────────────────
-    async function addEmployee(name, code) {
+    // ── Firestore listeners ──────────────────────────────────────────
+    let storesUnsub = null;
+    let employeesUnsub = null;
+
+    function startStoresListener() {
+      if (storesUnsub) return;
+      storesUnsub = db.collection("stores")
+        .orderBy("createdAt", "desc")
+        .onSnapshot(
+          (snap) => {
+            stores = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            renderStores();
+            renderStoreSelector();
+          },
+          (err) => {
+            console.error("stores listener error:", err);
+            showToast("Σφάλμα φόρτωσης καταστημάτων");
+          }
+        );
+    }
+
+    function setCurrentStore(storeId) {
+      currentStoreId = storeId || null;
+      if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
+      employees = [];
+      addBtn.disabled = !currentStoreId;
+      if (!currentStoreId) {
+        renderEmployees();
+        return;
+      }
+      employeesUnsub = db.collection("stores").doc(currentStoreId)
+        .collection("employees")
+        .orderBy("createdAt", "desc")
+        .onSnapshot(
+          (snap) => {
+            employees = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            renderEmployees();
+          },
+          (err) => {
+            console.error("employees listener error:", err);
+            showToast("Σφάλμα φόρτωσης εργαζομένων");
+          }
+        );
+    }
+
+    function stopAllListeners() {
+      if (storesUnsub) { storesUnsub(); storesUnsub = null; }
+      if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
+      stores = [];
+      employees = [];
+      currentStoreId = null;
+    }
+
+    // ── CRUD: stores ─────────────────────────────────────────────────
+    async function saveStore(name, address) {
       try {
-        await colRef.add({
-          name: name.trim(),
-          code: code.trim(),
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        showToast("Ο εργαζόμενος προστέθηκε");
+        if (editingStoreId) {
+          await db.collection("stores").doc(editingStoreId).update({
+            name: name.trim(),
+            address: address.trim() || null,
+          });
+          showToast("Το κατάστημα ενημερώθηκε");
+        } else {
+          await db.collection("stores").add({
+            name: name.trim(),
+            address: address.trim() || null,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdBy: auth.currentUser ? auth.currentUser.uid : null,
+          });
+          showToast("Το κατάστημα προστέθηκε");
+        }
       } catch (err) {
-        console.error(err);
+        console.error("saveStore failed:", err);
+        showToast("Σφάλμα κατά την αποθήκευση");
+      }
+    }
+
+    async function deleteStore(id) {
+      const s = stores.find((x) => x.id === id);
+      if (!s) return;
+      const empSnap = await db.collection("stores").doc(id).collection("employees").get();
+      const count = empSnap.size;
+      const msg = count > 0
+        ? `Διαγραφή του καταστήματος «${s.name}» ΚΑΙ των ${count} εργαζομένων του;`
+        : `Διαγραφή του καταστήματος «${s.name}»;`;
+      if (!confirm(msg)) return;
+      try {
+        // Cascade delete employees in batches of 500
+        const batch = db.batch();
+        empSnap.docs.forEach((d) => batch.delete(d.ref));
+        batch.delete(db.collection("stores").doc(id));
+        await batch.commit();
+        if (currentStoreId === id) setCurrentStore(null);
+        showToast("Το κατάστημα διαγράφηκε");
+      } catch (err) {
+        console.error("deleteStore failed:", err);
+        showToast("Σφάλμα κατά τη διαγραφή");
+      }
+    }
+
+    // ── CRUD: employees (per current store) ──────────────────────────
+    async function saveEmployee(name, code) {
+      if (!currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
+      const empCol = db.collection("stores").doc(currentStoreId).collection("employees");
+      try {
+        if (editingEmployeeId) {
+          await empCol.doc(editingEmployeeId).update({
+            name: name.trim(),
+            code: code.trim(),
+          });
+          showToast("Ο εργαζόμενος ενημερώθηκε");
+        } else {
+          await empCol.add({
+            name: name.trim(),
+            code: code.trim(),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            createdBy: auth.currentUser ? auth.currentUser.uid : null,
+          });
+          showToast("Ο εργαζόμενος προστέθηκε");
+        }
+      } catch (err) {
+        console.error("saveEmployee failed:", err);
         showToast("Σφάλμα κατά την αποθήκευση");
       }
     }
 
     async function deleteEmployee(id) {
       const emp = employees.find((e) => e.id === id);
-      if (!emp) return;
+      if (!emp || !currentStoreId) return;
       if (!confirm(`Διαγραφή του εργαζόμενου «${emp.name}»;`)) return;
       try {
-        await colRef.doc(id).delete();
+        await db.collection("stores").doc(currentStoreId)
+          .collection("employees").doc(id).delete();
         showToast("Ο εργαζόμενος διαγράφηκε");
       } catch (err) {
-        console.error(err);
+        console.error("deleteEmployee failed:", err);
         showToast("Σφάλμα κατά τη διαγραφή");
       }
     }
 
-    // ── Modal ────────────────────────────────────────────────────────
-    function openAddModal() {
+    // ── Modal: store ─────────────────────────────────────────────────
+    function openStoreModal(storeId) {
+      editingStoreId = storeId || null;
+      storeForm.reset();
+      if (storeId) {
+        const s = stores.find((x) => x.id === storeId);
+        if (s) {
+          storeNameInput.value = s.name || "";
+          storeAddressInput.value = s.address || "";
+        }
+        storeModalTitle.textContent = "Επεξεργασία Καταστήματος";
+      } else {
+        storeModalTitle.textContent = "Νέο Κατάστημα";
+      }
+      storeModal.classList.add("open");
+      setTimeout(() => storeNameInput.focus(), 100);
+    }
+    function closeStoreModal() {
+      storeModal.classList.remove("open");
+      editingStoreId = null;
+    }
+
+    // ── Modal: employee ──────────────────────────────────────────────
+    function openEmployeeModal(empId) {
+      if (!currentStoreId && !empId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
+      editingEmployeeId = empId || null;
       addForm.reset();
+      if (empId) {
+        const e = employees.find((x) => x.id === empId);
+        if (e) {
+          nameInput.value = e.name || "";
+          codeInput.value = e.code || "";
+        }
+        empModalTitle.textContent = "Επεξεργασία Εργαζόμενου";
+      } else {
+        empModalTitle.textContent = "Νέος Εργαζόμενος";
+      }
       addModal.classList.add("open");
       setTimeout(() => nameInput.focus(), 100);
     }
-    function closeAddModal() { addModal.classList.remove("open"); }
+    function closeAddModal() {
+      addModal.classList.remove("open");
+      editingEmployeeId = null;
+    }
 
     // ── QR screen ────────────────────────────────────────────────────
     function openQr(employee) {
@@ -732,29 +1047,54 @@
       qrInstance = null;
     }
 
-    // ── Events ───────────────────────────────────────────────────────
-    addBtn.addEventListener("click", openAddModal);
+    // ── Events: tabs ─────────────────────────────────────────────────
+    function switchTab(name) {
+      tabBtns.forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+      storesTab.hidden    = (name !== "stores");
+      employeesTab.hidden = (name !== "employees");
+    }
+    tabBtns.forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+    // ── Events: store form / list ────────────────────────────────────
+    addStoreBtn.addEventListener("click", () => openStoreModal());
+    storeCancelBtn.addEventListener("click", closeStoreModal);
+    storeModal.addEventListener("click", (e) => { if (e.target === storeModal) closeStoreModal(); });
+    storeForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = storeNameInput.value.trim();
+      const address = storeAddressInput.value.trim();
+      if (!name) return;
+      await saveStore(name, address);
+      closeStoreModal();
+    });
+    storesListEl.addEventListener("click", (e) => {
+      const delBtn = e.target.closest("[data-del-store]");
+      if (delBtn) { deleteStore(delBtn.dataset.delStore); return; }
+      const editBtn = e.target.closest("[data-edit-store]");
+      if (editBtn) { openStoreModal(editBtn.dataset.editStore); return; }
+    });
+
+    // ── Events: employee form / list ─────────────────────────────────
+    addBtn.addEventListener("click", () => openEmployeeModal());
     cancelBtn.addEventListener("click", closeAddModal);
     addModal.addEventListener("click", (e) => { if (e.target === addModal) closeAddModal(); });
-
-    addForm.addEventListener("submit", (e) => {
+    addForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const name = nameInput.value.trim();
       const code = codeInput.value.trim();
       if (!name || !code) return;
-      addEmployee(name, code);
+      await saveEmployee(name, code);
       closeAddModal();
     });
 
-    searchEl.addEventListener("input", render);
+    storeSelector.addEventListener("change", (e) => setCurrentStore(e.target.value));
+    searchEl.addEventListener("input", renderEmployees);
 
     listEl.addEventListener("click", (e) => {
-      const delBtn = e.target.closest("[data-del]");
-      if (delBtn) {
-        e.stopPropagation();
-        deleteEmployee(delBtn.dataset.del);
-        return;
-      }
+      const delBtn = e.target.closest("[data-del-emp]");
+      if (delBtn) { e.stopPropagation(); deleteEmployee(delBtn.dataset.delEmp); return; }
+      const editBtn = e.target.closest("[data-edit-emp]");
+      if (editBtn) { e.stopPropagation(); openEmployeeModal(editBtn.dataset.editEmp); return; }
       const card = e.target.closest(".employee");
       if (card) {
         const emp = employees.find((x) => x.id === card.dataset.id);
@@ -762,12 +1102,14 @@
       }
     });
 
+    // ── Events: QR / keyboard ────────────────────────────────────────
     qrClose.addEventListener("click", closeQr);
     qrScreen.addEventListener("click", (e) => { if (e.target === qrScreen) closeQr(); });
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         if (qrScreen.classList.contains("open")) closeQr();
+        else if (storeModal.classList.contains("open")) closeStoreModal();
         else if (addModal.classList.contains("open")) closeAddModal();
       }
     });
@@ -867,7 +1209,7 @@
     // ── Auth: state listener ─────────────────────────────────────────
     auth.onAuthStateChanged(async (user) => {
       if (!user) {
-        stopEmployeesListener();
+        stopAllListeners();
         userEmailEl.textContent = "";
         setAuthMode("login");
         showOnly(loginView);
@@ -884,7 +1226,7 @@
       } catch (err) {
         console.error("users.get failed:", err);
         showOnly(loginView);
-        showAuthError("Σφάλμα φόρτωσης λογαριασμού. Δοκίμασε ξανά.");
+        showAuthError("Σφάλμα φόρτωσης λογαριασμού: " + (err.code || err.message));
         return;
       }
 
@@ -899,7 +1241,7 @@
         } catch (err) {
           console.error("users.set failed:", err);
           showOnly(loginView);
-          showAuthError("Σφάλμα δημιουργίας λογαριασμού.");
+          showAuthError("Σφάλμα δημιουργίας λογαριασμού: " + (err.code || err.message));
           return;
         }
         userDoc = await userRef.get();
@@ -908,7 +1250,8 @@
       const data = userDoc.data() || {};
       if (data.role === "admin") {
         showOnly(appView);
-        startEmployeesListener();
+        switchTab("stores");
+        startStoresListener();
       } else {
         showOnly(pendingView);
       }

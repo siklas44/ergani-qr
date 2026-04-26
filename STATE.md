@@ -21,11 +21,13 @@
   - [x] Deployed στο main → live
 
 ## 🔄 Σε εξέλιξη
-**Φάση 1B — Multi-store admin dashboard**
+**Φάση 1B — Multi-store admin dashboard** (γράφεται τώρα)
 - [ ] Tabs UI: Καταστήματα / Εργαζόμενοι
-- [ ] Stores CRUD
-- [ ] Employees CRUD ανά store (μετάβαση από flat /employees σε /stores/{id}/employees)
-- [ ] Migration των υπαρχόντων εργαζομένων (ή deletion αν είναι junk)
+- [ ] Stores CRUD (add/edit/delete with cascade)
+- [ ] Store selector dropdown στο employees tab
+- [ ] Employees CRUD ανά store (path: /stores/{id}/employees)
+- [ ] Edit employee modal (νέο)
+- [ ] Επανάχρηση QR fullscreen view (ίδιο όπως πριν)
 
 ## ⏳ Αναμονή ενεργειών χρήστη
 - [ ] Firebase Console → Authentication → Email/Password → **Enable**
