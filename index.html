@@ -857,6 +857,36 @@
     }
     .emp-detail-actions .btn { flex: 1; }
 
+    /* ── Weekly tick boxes ────────────────────────────────── */
+    .ticks-row {
+      display: flex;
+      gap: 6px;
+    }
+    .tick-box {
+      flex: 1;
+      padding: 12px 4px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.05s;
+      text-align: center;
+    }
+    .tick-box:active { transform: scale(0.95); }
+    .tick-box.checked {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .tick-box[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     /* View visibility toggle */
     [hidden] { display: none !important; }
   </style>
@@ -965,6 +995,10 @@
       <div class="emp-detail-section">
         <div class="label">Ωράριο εργασίας</div>
         <div class="value" id="detSchedule">—</div>
+      </div>
+      <div class="emp-detail-section">
+        <div class="label">Έχει περαστεί αυτή την εβδομάδα</div>
+        <div class="ticks-row" id="detTicksRow"></div>
       </div>
       <div class="emp-detail-section">
         <div class="label">Κωδικός Εργάνη</div>
@@ -1206,6 +1240,7 @@
     const detStore      = $("detStore");
     const detSchedule   = $("detSchedule");
     const detCode       = $("detCode");
+    const detTicksRow   = $("detTicksRow");
     const detCloseBtn   = $("detCloseBtn");
     const detQrBtn      = $("detQrBtn");
     const detEditBtn    = $("detEditBtn");
@@ -2307,6 +2342,65 @@
       qrInstance = null;
     }
 
+    // ── Weekly tick boxes (auto-reset every Monday) ──────────────────
+    const TICK_DAYS = [
+      { key: "mon", label: "Δευ" },
+      { key: "tue", label: "Τρι" },
+      { key: "wed", label: "Τετ" },
+      { key: "thu", label: "Πεμ" },
+      { key: "fri", label: "Παρ" },
+      { key: "sat", label: "Σαβ" },
+      { key: "sun", label: "Κυρ" },
+    ];
+
+    // ISO-8601 week identifier (e.g. "2026-W17"). Week starts Monday.
+    function currentWeekId() {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      // Set to Thursday of current ISO week (the week's Thursday determines its year)
+      d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+      const yearStart = new Date(d.getFullYear(), 0, 1);
+      const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+      return d.getFullYear() + "-W" + String(weekNum).padStart(2, "0");
+    }
+
+    function getActiveWeekTicks(emp) {
+      const wt = emp && emp.weekTicks;
+      if (!wt || wt.weekId !== currentWeekId()) return {}; // stale = empty
+      return wt.days || {};
+    }
+
+    function canEditTicks() {
+      const role = (currentUserDoc && currentUserDoc.role) || null;
+      if (role === "admin") return true;
+      const p = (currentUserDoc && currentUserDoc.permissions) || {};
+      return !!(p.editEmployees || p.scanQR);
+    }
+
+    function renderTicks(emp) {
+      const ticks = getActiveWeekTicks(emp);
+      const editable = canEditTicks();
+      detTicksRow.innerHTML = TICK_DAYS.map((d) =>
+        `<button type="button" class="tick-box ${ticks[d.key] ? "checked" : ""}" data-day="${d.key}" ${editable ? "" : "disabled"}>${d.label}</button>`
+      ).join("");
+    }
+
+    async function toggleWeekTick(empId, dayKey) {
+      const emp = employees.find((x) => x.id === empId);
+      if (!emp) return;
+      const current = getActiveWeekTicks(emp);
+      const newDays = { ...current, [dayKey]: !current[dayKey] };
+      try {
+        await db.collection("stores").doc(currentStoreId)
+          .collection("employees").doc(empId).update({
+            weekTicks: { weekId: currentWeekId(), days: newDays },
+          });
+      } catch (err) {
+        console.error("toggleWeekTick failed:", err);
+        showToast("Σφάλμα ενημέρωσης");
+      }
+    }
+
     // ── Employee detail view ─────────────────────────────────────────
     let detailEmpId = null;
     function openEmployeeDetail(empId) {
@@ -2319,6 +2413,7 @@
       detStore.textContent = store ? ("🏪 " + store.name) : "";
       detSchedule.innerHTML = renderScheduleForDetail(e.schedule);
       detCode.textContent = e.code || "—";
+      renderTicks(e);
 
       // Show edit button only if the user can edit (admin or has editEmployees)
       const role = (currentUserDoc && currentUserDoc.role) || null;
@@ -2465,6 +2560,13 @@
     // Detail view buttons
     detCloseBtn.addEventListener("click", closeEmployeeDetail);
     empDetailModal.addEventListener("click", (e) => { if (e.target === empDetailModal) closeEmployeeDetail(); });
+    detTicksRow.addEventListener("click", (e) => {
+      const t = e.target.closest(".tick-box");
+      if (!t || t.disabled || !detailEmpId) return;
+      // Optimistic UI: flip the visual immediately, then persist
+      t.classList.toggle("checked");
+      toggleWeekTick(detailEmpId, t.dataset.day);
+    });
     detQrBtn.addEventListener("click", () => {
       const e = employees.find((x) => x.id === detailEmpId);
       if (e) { closeEmployeeDetail(); openQr(e); }
