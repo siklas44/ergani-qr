@@ -1018,6 +1018,9 @@
         <button type="button" class="btn btn-secondary" id="detEditBtn" hidden>✏️ Επεξεργασία</button>
         <button type="button" class="btn btn-primary" id="detQrBtn">📱 Εμφάνιση QR</button>
       </div>
+      <div class="emp-detail-actions" style="margin-top:8px;">
+        <button type="button" class="btn btn-secondary" id="detDeleteBtn" style="background:#fee2e2; color:#991b1b;" hidden>🗑️ Διαγραφή εργαζόμενου</button>
+      </div>
     </div>
   </div>
 
@@ -1252,6 +1255,7 @@
     const detCloseBtn   = $("detCloseBtn");
     const detQrBtn      = $("detQrBtn");
     const detEditBtn    = $("detEditBtn");
+    const detDeleteBtn  = $("detDeleteBtn");
     const importBtn       = $("importBtn");
     const importModal     = $("importModal");
     const importText      = $("importText");
@@ -1474,8 +1478,6 @@
               <div class="employee-code">${escapeHtml(e.code || "")}</div>
             </div>
             <button class="icon-btn" data-qr-emp="${e.id}" aria-label="Εμφάνιση QR">📱</button>
-            <button class="icon-btn" data-edit-emp="${e.id}" aria-label="Επεξεργασία">✏️</button>
-            <button class="icon-btn danger" data-del-emp="${e.id}" aria-label="Διαγραφή">🗑️</button>
           </div>
           <div class="employee-ticks">${tickBoxes}</div>
         </div>`;
@@ -2432,12 +2434,13 @@
       detSchedule.innerHTML = renderScheduleForDetail(e.schedule);
       detCode.textContent = e.code || "—";
 
-      // Show edit button only if the user can edit (admin or has editEmployees)
+      // Action buttons depend on role/permissions
       const role = (currentUserDoc && currentUserDoc.role) || null;
-      const canEdit = role === "admin" || (currentUserDoc && currentUserDoc.permissions && currentUserDoc.permissions.editEmployees);
-      detEditBtn.hidden = !canEdit;
-      const canShowQR = role === "admin" || (currentUserDoc && currentUserDoc.permissions && currentUserDoc.permissions.showQR);
-      detQrBtn.hidden = !canShowQR;
+      const isAdminRole = role === "admin";
+      const perms = (currentUserDoc && currentUserDoc.permissions) || {};
+      detEditBtn.hidden   = !(isAdminRole || perms.editEmployees);
+      detDeleteBtn.hidden = !(isAdminRole || perms.deleteEmployees);
+      detQrBtn.hidden     = !(isAdminRole || perms.showQR);
 
       empDetailModal.classList.add("open");
     }
@@ -2596,6 +2599,14 @@
       const id = detailEmpId;
       closeEmployeeDetail();
       openEmployeeModal(id);
+    });
+    detDeleteBtn.addEventListener("click", async () => {
+      const id = detailEmpId;
+      if (!id) return;
+      // deleteEmployee already does its own confirm
+      await deleteEmployee(id);
+      // Close detail only if the employee was actually removed
+      if (!employees.find((x) => x.id === id)) closeEmployeeDetail();
     });
 
     // ── Events: QR / keyboard ────────────────────────────────────────
