@@ -126,18 +126,30 @@
     }
     .employee {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 14px 14px;
       box-shadow: var(--shadow);
       cursor: pointer;
-      transition: transform 0.05s, border-color 0.15s;
+      transition: border-color 0.15s;
       user-select: none;
     }
-    .employee:active { transform: scale(0.99); }
     .employee:hover { border-color: var(--primary); }
+    .employee-row {
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    .employee-row:active { transform: scale(0.99); }
+    .employee-ticks {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
     .avatar {
       width: 42px;
       height: 42px;
@@ -997,10 +1009,6 @@
         <div class="value" id="detSchedule">—</div>
       </div>
       <div class="emp-detail-section">
-        <div class="label">Έχει περαστεί αυτή την εβδομάδα</div>
-        <div class="ticks-row" id="detTicksRow"></div>
-      </div>
-      <div class="emp-detail-section">
         <div class="label">Κωδικός Εργάνη</div>
         <div class="value code" id="detCode">—</div>
       </div>
@@ -1240,7 +1248,6 @@
     const detStore      = $("detStore");
     const detSchedule   = $("detSchedule");
     const detCode       = $("detCode");
-    const detTicksRow   = $("detTicksRow");
     const detCloseBtn   = $("detCloseBtn");
     const detQrBtn      = $("detQrBtn");
     const detEditBtn    = $("detEditBtn");
@@ -1451,17 +1458,27 @@
         return;
       }
 
-      listEl.innerHTML = filtered.map((e) => `
+      listEl.innerHTML = filtered.map((e) => {
+        const ticks = getActiveWeekTicks(e);
+        const editable = canEditTicks();
+        const tickBoxes = TICK_DAYS.map((d) =>
+          `<button type="button" class="tick-box ${ticks[d.key] ? "checked" : ""}" data-day="${d.key}" data-tick-emp="${e.id}" ${editable ? "" : "disabled"}>${d.label}</button>`
+        ).join("");
+        return `
         <div class="employee" data-id="${e.id}">
-          <div class="avatar">${escapeHtml(initials(e.name || "?"))}</div>
-          <div class="employee-info">
-            <div class="employee-name">${escapeHtml(e.name || "")}</div>
-            <div class="employee-code">${escapeHtml(e.code || "")}</div>
+          <div class="employee-row">
+            <div class="avatar">${escapeHtml(initials(e.name || "?"))}</div>
+            <div class="employee-info">
+              <div class="employee-name">${escapeHtml(e.name || "")}</div>
+              <div class="employee-code">${escapeHtml(e.code || "")}</div>
+            </div>
+            <button class="icon-btn" data-qr-emp="${e.id}" aria-label="Εμφάνιση QR">📱</button>
+            <button class="icon-btn" data-edit-emp="${e.id}" aria-label="Επεξεργασία">✏️</button>
+            <button class="icon-btn danger" data-del-emp="${e.id}" aria-label="Διαγραφή">🗑️</button>
           </div>
-          <button class="icon-btn" data-qr-emp="${e.id}" aria-label="Εμφάνιση QR">📱</button>
-          <button class="icon-btn" data-edit-emp="${e.id}" aria-label="Επεξεργασία">✏️</button>
-          <button class="icon-btn danger" data-del-emp="${e.id}" aria-label="Διαγραφή">🗑️</button>
-        </div>`).join("");
+          <div class="employee-ticks">${tickBoxes}</div>
+        </div>`;
+      }).join("");
     }
 
     // Update store dropdown in employees tab
@@ -2413,7 +2430,6 @@
       detStore.textContent = store ? ("🏪 " + store.name) : "";
       detSchedule.innerHTML = renderScheduleForDetail(e.schedule);
       detCode.textContent = e.code || "—";
-      renderTicks(e);
 
       // Show edit button only if the user can edit (admin or has editEmployees)
       const role = (currentUserDoc && currentUserDoc.role) || null;
@@ -2540,6 +2556,15 @@
     });
 
     listEl.addEventListener("click", (e) => {
+      const tickBtn = e.target.closest("[data-tick-emp]");
+      if (tickBtn) {
+        e.stopPropagation();
+        if (!tickBtn.disabled) {
+          tickBtn.classList.toggle("checked");
+          toggleWeekTick(tickBtn.dataset.tickEmp, tickBtn.dataset.day);
+        }
+        return;
+      }
       const delBtn = e.target.closest("[data-del-emp]");
       if (delBtn) { e.stopPropagation(); deleteEmployee(delBtn.dataset.delEmp); return; }
       const editBtn = e.target.closest("[data-edit-emp]");
@@ -2551,22 +2576,17 @@
         if (emp) openQr(emp);
         return;
       }
-      const card = e.target.closest(".employee");
-      if (card) {
-        openEmployeeDetail(card.dataset.id);
+      // Click on the row area (avatar/name/code) opens detail
+      const row = e.target.closest(".employee-row");
+      if (row) {
+        const card = e.target.closest(".employee");
+        if (card) openEmployeeDetail(card.dataset.id);
       }
     });
 
     // Detail view buttons
     detCloseBtn.addEventListener("click", closeEmployeeDetail);
     empDetailModal.addEventListener("click", (e) => { if (e.target === empDetailModal) closeEmployeeDetail(); });
-    detTicksRow.addEventListener("click", (e) => {
-      const t = e.target.closest(".tick-box");
-      if (!t || t.disabled || !detailEmpId) return;
-      // Optimistic UI: flip the visual immediately, then persist
-      t.classList.toggle("checked");
-      toggleWeekTick(detailEmpId, t.dataset.day);
-    });
     detQrBtn.addEventListener("click", () => {
       const e = employees.find((x) => x.id === detailEmpId);
       if (e) { closeEmployeeDetail(); openQr(e); }
