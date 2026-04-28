@@ -1520,6 +1520,7 @@
 
     function startStoresListener() {
       if (storesUnsub) return;
+      let firstSnap = true;
       storesUnsub = db.collection("stores")
         .orderBy("createdAt", "desc")
         .onSnapshot(
@@ -1527,6 +1528,11 @@
             stores = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
             renderStores();
             renderStoreSelector();
+            // Auto-select on first load if there's exactly one store
+            if (firstSnap && stores.length === 1 && !currentStoreId) {
+              setCurrentStore(stores[0].id);
+            }
+            firstSnap = false;
           },
           (err) => {
             console.error("stores listener error:", err);
