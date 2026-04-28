@@ -76,9 +76,14 @@ service cloud.firestore {
         allow create: if isAdmin() ||
           (hasStore(storeId) && hasPermission('addEmployees'));
 
-        // Update: admin OR (assigned + editEmployees)
-        allow update: if isAdmin() ||
-          (hasStore(storeId) && hasPermission('editEmployees'));
+        // Update:
+        //  - admin
+        //  - or assigned + editEmployees (full edit)
+        //  - or assigned + tickDays AND only weekTicks field is being changed
+        allow update: if isAdmin()
+          || (hasStore(storeId) && hasPermission('editEmployees'))
+          || (hasStore(storeId) && hasPermission('tickDays')
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weekTicks']));
 
         // Delete: admin OR (assigned + deleteEmployees)
         allow delete: if isAdmin() ||
