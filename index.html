@@ -1487,6 +1487,17 @@
           <div class="employee-ticks">${tickBoxes}</div>
         </div>`;
       }).join("");
+
+      // Direct click handlers for tick buttons (more reliable on Android Chrome)
+      listEl.querySelectorAll("[data-tick-emp]").forEach((btn) => {
+        btn.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (this.disabled) return;
+          this.classList.toggle("checked");
+          toggleWeekTick(this.dataset.tickEmp, this.dataset.day);
+        });
+      });
     }
 
     // Update store dropdown in employees tab
@@ -2565,15 +2576,9 @@
     });
 
     listEl.addEventListener("click", (e) => {
-      const tickBtn = e.target.closest("[data-tick-emp]");
-      if (tickBtn) {
-        e.stopPropagation();
-        if (!tickBtn.disabled) {
-          tickBtn.classList.toggle("checked");
-          toggleWeekTick(tickBtn.dataset.tickEmp, tickBtn.dataset.day);
-        }
-        return;
-      }
+      // Tick buttons: handled by direct listeners attached after each render
+      // (Android Chrome was unreliable with event delegation here)
+      if (e.target.closest("[data-tick-emp]")) return;
       const delBtn = e.target.closest("[data-del-emp]");
       if (delBtn) { e.stopPropagation(); deleteEmployee(delBtn.dataset.delEmp); return; }
       const editBtn = e.target.closest("[data-edit-emp]");
