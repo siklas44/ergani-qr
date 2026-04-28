@@ -877,6 +877,7 @@
     .tick-box {
       flex: 1;
       padding: 14px 4px;
+      min-height: 44px;
       background: #fff;
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -885,8 +886,12 @@
       color: #e5e7eb;
       cursor: pointer;
       user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: rgba(13,110,253,0.15);
+      touch-action: manipulation;
       transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.05s;
       text-align: center;
+      font-family: inherit;
     }
     .tick-box:active { transform: scale(0.95); }
     .tick-box.checked {
