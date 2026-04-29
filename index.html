@@ -911,6 +911,19 @@
       cursor: not-allowed;
     }
 
+    /* Store group header in the 'all employees' view */
+    .store-header {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--primary);
+      padding: 14px 4px 6px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+    }
+    .store-header:first-child { padding-top: 4px; }
+
     /* View visibility toggle */
     [hidden] { display: none !important; }
   </style>
@@ -1792,24 +1805,32 @@
         return;
       }
 
-      allListEl.innerHTML = filtered.map((e) => {
+      // Group by store and render with section headers
+      let lastStoreId = null;
+      const parts = [];
+      filtered.forEach((e) => {
+        if (e.storeId !== lastStoreId) {
+          parts.push(`<div class="store-header">🏪 ${escapeHtml(e.storeName || "")}</div>`);
+          lastStoreId = e.storeId;
+        }
         const ticks = getActiveWeekTicks(e);
         const tickBoxes = TICK_DAYS.map((d) => {
           const state = tickStateOf(ticks[d.key]);
           return `<button type="button" class="tick-box ${tickClassFor(state)}" data-day="${d.key}" data-tick-emp="${e.id}" data-tick-store="${e.storeId}" data-day-label="${d.label}">${tickLabelFor(state, d.label)}</button>`;
         }).join("");
-        return `
+        parts.push(`
         <div class="employee" data-id="${e.id}">
           <div class="employee-row">
             <div class="avatar">${escapeHtml(initials(e.name || "?"))}</div>
             <div class="employee-info">
               <div class="employee-name">${escapeHtml(e.name || "")}</div>
-              <div class="employee-code">🏪 ${escapeHtml(e.storeName || "")}</div>
+              <div class="employee-code">${escapeHtml(e.code || "")}</div>
             </div>
           </div>
           <div class="employee-ticks">${tickBoxes}</div>
-        </div>`;
-      }).join("");
+        </div>`);
+      });
+      allListEl.innerHTML = parts.join("");
 
       // Direct click handlers
       allListEl.querySelectorAll("[data-tick-emp]").forEach((btn) => {
