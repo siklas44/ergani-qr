@@ -900,6 +900,12 @@
       color: #fff;
       font-weight: 600;
     }
+    .tick-box.checked-x {
+      background: #fee2e2;
+      border-color: #dc2626;
+      color: #dc2626;
+      font-weight: 700;
+    }
     .tick-box[disabled] {
       opacity: 0.6;
       cursor: not-allowed;
@@ -970,6 +976,7 @@
     <nav class="tabs">
       <button class="tab-btn active" data-tab="stores">🏪 Καταστήματα</button>
       <button class="tab-btn" data-tab="employees">👷 Εργαζόμενοι</button>
+      <button class="tab-btn" data-tab="all" id="allTabBtn" hidden>📋 Όλοι</button>
       <button class="tab-btn" data-tab="users" id="usersTabBtn" hidden>👥 Χρήστες</button>
     </nav>
 
@@ -978,6 +985,14 @@
       <section id="storesTab">
         <button class="add-btn" id="addStoreBtn">+ Νέο Κατάστημα</button>
         <div class="list" id="storesList"></div>
+      </section>
+
+      <!-- All-employees tab (admin only): every employee from every store -->
+      <section id="allTab" hidden>
+        <div class="search-box">
+          <input type="search" id="allSearch" placeholder="Αναζήτηση εργαζόμενου ή καταστήματος..." autocomplete="off" />
+        </div>
+        <div class="list" id="allList"></div>
       </section>
 
       <!-- Users tab -->
@@ -1277,6 +1292,10 @@
     // Users tab
     const usersTabBtn   = $("usersTabBtn");
     const usersTab      = $("usersTab");
+    const allTabBtn     = $("allTabBtn");
+    const allTab        = $("allTab");
+    const allListEl     = $("allList");
+    const allSearchEl   = $("allSearch");
     const usersListEl   = $("usersList");
     const addUserBtn    = $("addUserBtn");
     const userModal     = $("userModal");
@@ -1473,9 +1492,10 @@
       listEl.innerHTML = filtered.map((e) => {
         const ticks = getActiveWeekTicks(e);
         const editable = canEditTicks();
-        const tickBoxes = TICK_DAYS.map((d) =>
-          `<button type="button" class="tick-box ${ticks[d.key] ? "checked" : ""}" data-day="${d.key}" data-tick-emp="${e.id}" ${editable ? "" : "disabled"}>${d.label}</button>`
-        ).join("");
+        const tickBoxes = TICK_DAYS.map((d) => {
+          const state = tickStateOf(ticks[d.key]);
+          return `<button type="button" class="tick-box ${tickClassFor(state)}" data-day="${d.key}" data-tick-emp="${e.id}" data-day-label="${d.label}" ${editable ? "" : "disabled"}>${tickLabelFor(state, d.label)}</button>`;
+        }).join("");
         return `
         <div class="employee" data-id="${e.id}">
           <div class="employee-row">
@@ -1496,7 +1516,14 @@
           e.preventDefault();
           e.stopPropagation();
           if (this.disabled) return;
-          this.classList.toggle("checked");
+          // Optimistic UI: cycle the visual immediately
+          const cur = this.classList.contains("checked") ? "tick"
+                    : this.classList.contains("checked-x") ? "x" : "";
+          const nxt = nextTickState(cur);
+          this.classList.remove("checked", "checked-x");
+          if (nxt === "tick") this.classList.add("checked");
+          else if (nxt === "x") this.classList.add("checked-x");
+          this.textContent = tickLabelFor(nxt, this.dataset.dayLabel);
           toggleWeekTick(this.dataset.tickEmp, this.dataset.day);
         });
       });
@@ -1535,6 +1562,9 @@
               setCurrentStore(stores[0].id);
             }
             firstSnap = false;
+            // Refresh all-employees listener whenever stores change (admin)
+            const role = (currentUserDoc && currentUserDoc.role) || null;
+            if (role === "admin") startAllEmployeesListener();
           },
           (err) => {
             console.error("stores listener error:", err);
@@ -1606,6 +1636,7 @@
       if (storesUnsub) { storesUnsub(); storesUnsub = null; }
       if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
       stopUsersListener();
+      stopAllEmployeesListener();
       stores = [];
       employees = [];
       currentStoreId = null;
@@ -1698,6 +1729,106 @@
         console.error("deleteEmployee failed:", err);
         showToast("Σφάλμα κατά τη διαγραφή");
       }
+    }
+
+    // ── All employees view (admin only) ──────────────────────────────
+    let allStoreEmpUnsubs = []; // unsubscribe callbacks per store
+    let allEmployees = [];       // [{id, storeId, storeName, ...}]
+
+    function startAllEmployeesListener() {
+      // Stop any existing listeners first
+      stopAllEmployeesListener();
+      if (!stores || stores.length === 0) {
+        // Wait until stores arrive (admin path always starts stores listener first)
+        return;
+      }
+      stores.forEach((store) => {
+        const unsub = db.collection("stores").doc(store.id)
+          .collection("employees")
+          .orderBy("createdAt", "desc")
+          .onSnapshot(
+            (snap) => {
+              // Replace this store's slice
+              allEmployees = allEmployees.filter((e) => e.storeId !== store.id);
+              snap.docs.forEach((d) => {
+                allEmployees.push({
+                  id: d.id,
+                  storeId: store.id,
+                  storeName: store.name,
+                  ...d.data(),
+                });
+              });
+              renderAllEmployees();
+            },
+            (err) => console.error("all-employees listener error:", err)
+          );
+        allStoreEmpUnsubs.push(unsub);
+      });
+    }
+    function stopAllEmployeesListener() {
+      allStoreEmpUnsubs.forEach((u) => { try { u(); } catch (e) {} });
+      allStoreEmpUnsubs = [];
+      allEmployees = [];
+    }
+
+    function renderAllEmployees() {
+      const q = (allSearchEl.value || "").trim().toLowerCase();
+      const filtered = q
+        ? allEmployees.filter((e) =>
+            (e.name || "").toLowerCase().includes(q) ||
+            (e.code || "").toLowerCase().includes(q) ||
+            (e.storeName || "").toLowerCase().includes(q))
+        : allEmployees;
+
+      // Sort: by store name, then employee name
+      filtered.sort((a, b) => {
+        const s = (a.storeName || "").localeCompare(b.storeName || "");
+        if (s !== 0) return s;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+
+      if (filtered.length === 0) {
+        allListEl.innerHTML = `<div class="empty"><p>Δεν υπάρχουν εργαζόμενοι.</p></div>`;
+        return;
+      }
+
+      allListEl.innerHTML = filtered.map((e) => {
+        const ticks = getActiveWeekTicks(e);
+        const tickBoxes = TICK_DAYS.map((d) => {
+          const state = tickStateOf(ticks[d.key]);
+          return `<button type="button" class="tick-box ${tickClassFor(state)}" data-day="${d.key}" data-tick-emp="${e.id}" data-tick-store="${e.storeId}" data-day-label="${d.label}">${tickLabelFor(state, d.label)}</button>`;
+        }).join("");
+        return `
+        <div class="employee" data-id="${e.id}">
+          <div class="employee-row">
+            <div class="avatar">${escapeHtml(initials(e.name || "?"))}</div>
+            <div class="employee-info">
+              <div class="employee-name">${escapeHtml(e.name || "")}</div>
+              <div class="employee-code">🏪 ${escapeHtml(e.storeName || "")}</div>
+            </div>
+          </div>
+          <div class="employee-ticks">${tickBoxes}</div>
+        </div>`;
+      }).join("");
+
+      // Direct click handlers
+      allListEl.querySelectorAll("[data-tick-emp]").forEach((btn) => {
+        btn.addEventListener("click", function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          // Optimistic visual
+          const cur = this.classList.contains("checked") ? "tick"
+                    : this.classList.contains("checked-x") ? "x" : "";
+          const nxt = nextTickState(cur);
+          this.classList.remove("checked", "checked-x");
+          if (nxt === "tick") this.classList.add("checked");
+          else if (nxt === "x") this.classList.add("checked-x");
+          this.textContent = tickLabelFor(nxt, this.dataset.dayLabel);
+          // Find current emp object to pass to cycleWeekTick
+          const empObj = allEmployees.find((x) => x.id === this.dataset.tickEmp && x.storeId === this.dataset.tickStore);
+          cycleWeekTick(this.dataset.tickStore, this.dataset.tickEmp, this.dataset.day, empObj);
+        });
+      });
     }
 
     // ── Users (admin only) ───────────────────────────────────────────
@@ -2416,6 +2547,28 @@
       return wt.days || {};
     }
 
+    // Map raw tick value to logical state: 'tick' | 'x' | '' (empty)
+    function tickStateOf(v) {
+      if (v === true || v === "tick") return "tick";
+      if (v === "x") return "x";
+      return "";
+    }
+    function nextTickState(s) {
+      if (s === "")     return "tick";
+      if (s === "tick") return "x";
+      return ""; // back to empty
+    }
+    function tickClassFor(s) {
+      if (s === "tick") return "checked";
+      if (s === "x")    return "checked-x";
+      return "";
+    }
+    function tickLabelFor(state, dayLabel) {
+      if (state === "tick") return "✓";
+      if (state === "x")    return "✗";
+      return dayLabel;
+    }
+
     function canEditTicks() {
       const role = (currentUserDoc && currentUserDoc.role) || null;
       if (role === "admin") return true;
@@ -2431,20 +2584,26 @@
       ).join("");
     }
 
-    async function toggleWeekTick(empId, dayKey) {
-      const emp = employees.find((x) => x.id === empId);
+    // Cycle a single day's tick state for an employee (tri-state)
+    async function cycleWeekTick(storeId, empId, dayKey, currentEmp) {
+      const emp = currentEmp || employees.find((x) => x.id === empId);
       if (!emp) return;
       const current = getActiveWeekTicks(emp);
-      const newDays = { ...current, [dayKey]: !current[dayKey] };
+      const next = nextTickState(tickStateOf(current[dayKey]));
+      const newDays = { ...current, [dayKey]: next };
       try {
-        await db.collection("stores").doc(currentStoreId)
+        await db.collection("stores").doc(storeId)
           .collection("employees").doc(empId).update({
             weekTicks: { weekId: currentWeekId(), days: newDays },
           });
       } catch (err) {
-        console.error("toggleWeekTick failed:", err);
+        console.error("cycleWeekTick failed:", err);
         showToast("Σφάλμα ενημέρωσης");
       }
+    }
+    // Backwards-compat wrapper for existing callers in this store's view
+    function toggleWeekTick(empId, dayKey) {
+      return cycleWeekTick(currentStoreId, empId, dayKey);
     }
 
     // ── Employee detail view ─────────────────────────────────────────
@@ -2480,9 +2639,11 @@
       tabBtns.forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
       storesTab.hidden    = (name !== "stores");
       employeesTab.hidden = (name !== "employees");
+      allTab.hidden       = (name !== "all");
       usersTab.hidden     = (name !== "users");
     }
     tabBtns.forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+    allSearchEl.addEventListener("input", renderAllEmployees);
 
     // ── Events: users tab ────────────────────────────────────────────
     addUserBtn.addEventListener("click", () => openUserModal());
@@ -2744,6 +2905,7 @@
         stopAllListeners();
         userEmailEl.textContent = "";
         usersTabBtn.hidden = true;
+        allTabBtn.hidden = true;
         currentUserDoc = null;
         setAuthMode("login");
         showOnly(loginView);
@@ -2794,6 +2956,7 @@
       if (data.role === "admin") {
         applyPermissions("admin", {});
         applyEmployeePermissions("admin", {});
+        allTabBtn.hidden = false;
         showOnly(appView);
         switchTab("stores");
         startStoresListener();
