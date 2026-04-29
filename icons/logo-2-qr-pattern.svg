@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0d6efd"/>
+  <!-- 3 corner finder patterns (top-left, top-right, bottom-left) -->
+  <g fill="#ffffff">
+    <!-- Top-left -->
+    <rect x="56"  y="56"  width="120" height="120" rx="14"/>
+    <!-- Top-right -->
+    <rect x="336" y="56"  width="120" height="120" rx="14"/>
+    <!-- Bottom-left -->
+    <rect x="56"  y="336" width="120" height="120" rx="14"/>
+  </g>
+  <g fill="#0d6efd">
+    <rect x="80"  y="80"  width="72" height="72" rx="8"/>
+    <rect x="360" y="80"  width="72" height="72" rx="8"/>
+    <rect x="80"  y="360" width="72" height="72" rx="8"/>
+  </g>
+  <g fill="#ffffff">
+    <rect x="98"  y="98"  width="36" height="36" rx="4"/>
+    <rect x="378" y="98"  width="36" height="36" rx="4"/>
+    <rect x="98"  y="378" width="36" height="36" rx="4"/>
+  </g>
+  <!-- Some scattered "data" squares to suggest QR pattern -->
+  <g fill="#ffffff">
+    <rect x="216" y="56"  width="36" height="36" rx="4"/>
+    <rect x="276" y="100" width="36" height="36" rx="4"/>
+    <rect x="216" y="150" width="36" height="36" rx="4"/>
+    <rect x="56"  y="216" width="36" height="36" rx="4"/>
+    <rect x="216" y="216" width="36" height="36" rx="4"/>
+    <rect x="276" y="260" width="36" height="36" rx="4"/>
+    <rect x="216" y="320" width="36" height="36" rx="4"/>
+    <rect x="336" y="216" width="36" height="36" rx="4"/>
+    <rect x="396" y="260" width="36" height="36" rx="4"/>
+    <rect x="336" y="320" width="36" height="36" rx="4"/>
+    <rect x="396" y="378" width="36" height="36" rx="4"/>
+    <rect x="276" y="378" width="36" height="36" rx="4"/>
+    <rect x="216" y="420" width="36" height="36" rx="4"/>
+    <rect x="336" y="420" width="36" height="36" rx="4"/>
+  </g>
+</svg>
