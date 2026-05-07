@@ -941,6 +941,11 @@
     }
     .store-header:first-child { padding-top: 4px; }
 
+    /* Hide schedule-import button on small screens (paste from Excel needs a real keyboard) */
+    @media (max-width: 768px) {
+      #schedImportBtn { display: none !important; }
+    }
+
     /* View visibility toggle */
     [hidden] { display: none !important; }
   </style>
@@ -1762,6 +1767,160 @@
         showToast("Σφάλμα κατά τη διαγραφή");
       }
     }
+
+    // ── Schedule import from Εργάνη (paste from Excel) ───────────────
+    // Each Excel row looks like (tab-separated):
+    //   NAME (CODE)<tab>EDRA<tab>DATE<tab><tab>Fixed<tab>
+    //   ΔΕ X, ΤΡ Y, ΤΕ Z, ΠΕ W, ΠΑ V, ΣΑ U, ΚΥ T<tab>SentToErgani<tab>...
+    // Day codes: ΔΕ→mon, ΤΡ→tue, ΤΕ→wed, ΠΕ→thu, ΠΑ→fri, ΣΑ→sat, ΚΥ→sun
+    // Cell values: 'HH:MM-HH:MM' (work) | 'ΑΝΑΠ'/'ΜΗ-ΕΡΓ' (off)
+    const ERGANI_DAY_MAP = {
+      "ΔΕ": "mon", "ΤΡ": "tue", "ΤΕ": "wed", "ΠΕ": "thu",
+      "ΠΑ": "fri", "ΣΑ": "sat", "ΚΥ": "sun",
+    };
+
+    function parseErganiSchedules(text) {
+      const results = [];
+      const errors = [];
+      text.split(/\r?\n/).forEach((rawLine, i) => {
+        const line = rawLine.trim();
+        if (!line) return;
+        const cols = line.split("\t");
+        if (cols.length < 6) {
+          errors.push({ line: i + 1, reason: "λίγες στήλες (απαιτούνται tabs)" });
+          return;
+        }
+        const fullName = cols[0].trim();
+        if (!fullName) return;
+        // Strip trailing "(XXX)" abbreviation code
+        const name = fullName.replace(/\s*\([^)]*\)\s*$/, "").trim();
+        // Find the schedule string: usually col 5, but tolerate other indices
+        // by picking the column that contains a Greek day code (ΔΕ/ΤΡ/...)
+        let scheduleStr = "";
+        for (let c = cols.length - 1; c >= 0; c--) {
+          const v = (cols[c] || "").trim();
+          if (/(ΔΕ|ΤΡ|ΤΕ|ΠΕ|ΠΑ|ΣΑ|ΚΥ)\s/.test(v) && v.includes(",")) {
+            scheduleStr = v; break;
+          }
+        }
+        if (!scheduleStr) {
+          errors.push({ line: i + 1, reason: "δεν βρέθηκε ωράριο για " + name });
+          return;
+        }
+
+        const schedule = {};
+        scheduleStr.split(",").forEach((part) => {
+          const t = part.trim();
+          if (!t) return;
+          const m = t.match(/^(ΔΕ|ΤΡ|ΤΕ|ΠΕ|ΠΑ|ΣΑ|ΚΥ)\s+(.+)$/);
+          if (!m) return;
+          const dayKey = ERGANI_DAY_MAP[m[1]];
+          const value = m[2].trim();
+          if (/^(ΑΝΑΠ|ΜΗ[-\s]?ΕΡΓ)/i.test(value)) {
+            schedule[dayKey] = { off: true };
+          } else {
+            const tm = value.match(/^(\d{1,2}):?(\d{0,2})\s*-\s*(\d{1,2}):?(\d{0,2})/);
+            if (tm) {
+              const fH = tm[1].padStart(2, "0");
+              const fM = (tm[2] || "00").padStart(2, "0");
+              const tH = tm[3].padStart(2, "0");
+              const tM = (tm[4] || "00").padStart(2, "0");
+              schedule[dayKey] = { from: fH + ":" + fM, to: tH + ":" + tM };
+            }
+          }
+        });
+
+        if (Object.keys(schedule).length === 0) {
+          errors.push({ line: i + 1, reason: "δεν διαβάστηκαν μέρες για " + name });
+          return;
+        }
+        results.push({ name, schedule });
+      });
+      return { results, errors };
+    }
+
+    function normalizeName(s) {
+      return (s || "").normalize("NFKD").replace(/\s+/g, " ").trim().toUpperCase();
+    }
+
+    function findEmpForName(name, employeesList) {
+      const target = normalizeName(name);
+      // Exact match first
+      let hit = employeesList.find((e) => normalizeName(e.name) === target);
+      if (hit) return hit;
+      // Try matching with reversed word order (LAST FIRST vs FIRST LAST)
+      const reversed = target.split(" ").reverse().join(" ");
+      hit = employeesList.find((e) => normalizeName(e.name) === reversed);
+      return hit;
+    }
+
+    function previewScheduleImport() {
+      const { results, errors } = parseErganiSchedules(schedImportText.value || "");
+      const matched = [];
+      const unmatched = [];
+      const sameSchedule = [];
+      results.forEach((r) => {
+        const emp = findEmpForName(r.name, allEmployees);
+        if (!emp) {
+          unmatched.push(r.name);
+          return;
+        }
+        // Compare with existing schedule
+        const a = JSON.stringify(emp.schedule || {});
+        const b = JSON.stringify(r.schedule);
+        if (a === b) {
+          sameSchedule.push({ name: emp.name, empId: emp.id, storeId: emp.storeId });
+        } else {
+          matched.push({ name: emp.name, empId: emp.id, storeId: emp.storeId, schedule: r.schedule });
+        }
+      });
+
+      const lines = [];
+      lines.push(`<strong>${results.length}</strong> γραμμές διαβάστηκαν`);
+      if (matched.length)      lines.push(`✅ <strong>${matched.length}</strong> ωράρια θα ενημερωθούν/προστεθούν`);
+      if (sameSchedule.length) lines.push(`⏭️ <strong>${sameSchedule.length}</strong> ίδια — δεν χρειάζεται αλλαγή`);
+      if (unmatched.length)    lines.push(`⚠️ <strong>${unmatched.length}</strong> δεν είναι στη βάση (παραλείπονται):<br><span style="color:var(--muted);font-size:0.78rem">${unmatched.slice(0,8).map(escapeHtml).join(", ")}${unmatched.length>8?", ...":""}</span>`);
+      if (errors.length)       lines.push(`❌ <strong>${errors.length}</strong> γραμμές με πρόβλημα`);
+      if (results.length === 0 && errors.length === 0) {
+        schedImportPreview.textContent = "Επικόλλησε γραμμές παραπάνω για προεπισκόπηση.";
+      } else {
+        schedImportPreview.innerHTML = lines.join("<br>");
+      }
+      schedImportDoBtn.disabled = matched.length === 0;
+      schedImportDoBtn.textContent = matched.length > 0
+        ? `Ενημέρωση ${matched.length} ωραρίων`
+        : "Εισαγωγή";
+      return { matched, unmatched, sameSchedule, errors };
+    }
+
+    async function applyScheduleImport() {
+      const { matched } = previewScheduleImport();
+      if (matched.length === 0) return;
+      schedImportDoBtn.disabled = true;
+      let ok = 0, fail = 0;
+      for (const m of matched) {
+        try {
+          await db.collection("stores").doc(m.storeId)
+            .collection("employees").doc(m.empId)
+            .update({ schedule: m.schedule });
+          ok++;
+        } catch (err) {
+          console.error("schedule update failed for " + m.name, err);
+          fail++;
+        }
+      }
+      showToast(`Ενημερώθηκαν ${ok}` + (fail > 0 ? ` (${fail} σφάλματα)` : ""));
+      closeSchedImportModal();
+    }
+
+    function openSchedImportModal() {
+      schedImportText.value = "";
+      schedImportFile.value = "";
+      previewScheduleImport();
+      schedImportModal.classList.add("open");
+      setTimeout(() => schedImportText.focus(), 100);
+    }
+    function closeSchedImportModal() { schedImportModal.classList.remove("open"); }
 
     // ── All employees view (admin only) ──────────────────────────────
     let allStoreEmpUnsubs = []; // unsubscribe callbacks per store
@@ -2702,6 +2861,20 @@
     tabBtns.forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
     allSearchEl.addEventListener("input", renderAllEmployees);
 
+    // Schedule import wiring
+    schedImportBtn.addEventListener("click", openSchedImportModal);
+    schedImportCancelBtn.addEventListener("click", closeSchedImportModal);
+    schedImportModal.addEventListener("click", (e) => { if (e.target === schedImportModal) closeSchedImportModal(); });
+    schedImportDoBtn.addEventListener("click", applyScheduleImport);
+    schedImportText.addEventListener("input", previewScheduleImport);
+    schedImportFile.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => { schedImportText.value = ev.target.result || ""; previewScheduleImport(); };
+      reader.readAsText(file, "UTF-8");
+    });
+
     // ── Events: users tab ────────────────────────────────────────────
     addUserBtn.addEventListener("click", () => openUserModal());
     userCancelBtn.addEventListener("click", closeUserModal);
@@ -2858,6 +3031,7 @@
         else if (scanModal.classList.contains("open")) closeScanModal();
         else if (empDetailModal.classList.contains("open")) closeEmployeeDetail();
         else if (importModal.classList.contains("open")) closeImportModal();
+        else if (schedImportModal.classList.contains("open")) closeSchedImportModal();
         else if (userModal.classList.contains("open")) closeUserModal();
         else if (storeModal.classList.contains("open")) closeStoreModal();
         else if (addModal.classList.contains("open")) closeAddModal();
