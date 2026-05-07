@@ -942,6 +942,20 @@
     }
     .store-header:first-child { padding-top: 4px; }
 
+    /* Bell toggle in header */
+    .bell-btn {
+      background: rgba(255,255,255,0.18);
+      color: #fff;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      margin-right: 6px;
+    }
+    .bell-btn:active { background: rgba(255,255,255,0.3); }
+    .bell-btn.on { background: rgba(255,255,255,0.32); }
+
     /* Hide schedule-import button on small screens (paste from Excel needs a real keyboard) */
     @media (max-width: 768px) {
       #schedImportBtn { display: none !important; }
@@ -1005,6 +1019,7 @@
       <div class="subtitle">Πίνακας διαχείρισης</div>
       <div class="user-badge">
         <span class="email" id="userEmail"></span>
+        <button class="bell-btn" id="bellBtn" title="Ειδοποιήσεις" hidden>🔕</button>
         <button class="logout-btn" id="logoutBtn">Αποσύνδεση</button>
       </div>
     </header>
@@ -1283,7 +1298,7 @@
     const messaging = firebase.messaging.isSupported() ? firebase.messaging() : null;
     // VAPID public key — generate at: Firebase Console → Project Settings →
     // Cloud Messaging → Web Push certificates → Generate key pair
-    const FCM_VAPID_KEY = "REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY";
+    const FCM_VAPID_KEY = "BNc2mZaPJg8KHtm3tumCmRLzYMNVvYAmBaxVZUXlHUMfgu9_XN_yDIVHljsdY8eY8uYgTaig3XKfHY2TIEflQFY";
 
     const BOOTSTRAP_ADMIN_EMAIL = "siklas44@gmail.com";
 
@@ -1310,6 +1325,7 @@
     const authInfo    = $("authInfo");
     const userEmailEl = $("userEmail");
     const logoutBtn   = $("logoutBtn");
+    const bellBtn     = $("bellBtn");
     const pendingLogoutBtn = $("pendingLogoutBtn");
     // Stores tab
     const storesTab     = $("storesTab");
@@ -3235,6 +3251,31 @@
       });
     }
 
+    function refreshBellUI() {
+      if (!messaging) { bellBtn.hidden = true; return; }
+      bellBtn.hidden = false;
+      const enabled = !!(currentUserDoc && currentUserDoc.notificationsEnabled);
+      bellBtn.textContent = enabled ? "🔔" : "🔕";
+      bellBtn.classList.toggle("on", enabled);
+      bellBtn.title = enabled ? "Ειδοποιήσεις: ΕΝΕΡΓΕΣ — πάτα για απενεργοποίηση"
+                              : "Ειδοποιήσεις: ΑΝΕΝΕΡΓΕΣ — πάτα για ενεργοποίηση";
+    }
+
+    bellBtn.addEventListener("click", async () => {
+      const u = auth.currentUser;
+      if (!u) return;
+      const enabled = !!(currentUserDoc && currentUserDoc.notificationsEnabled);
+      if (enabled) {
+        if (!confirm("Είσαι σίγουρος ότι θέλεις να απενεργοποιήσεις τις ειδοποιήσεις; Δεν θα λαμβάνεις πλέον reminders ωραρίων.")) return;
+        const ok = await disablePush(u.uid);
+        if (ok && currentUserDoc) currentUserDoc.notificationsEnabled = false;
+      } else {
+        const ok = await enablePush(u.uid);
+        if (ok && currentUserDoc) currentUserDoc.notificationsEnabled = true;
+      }
+      refreshBellUI();
+    });
+
     // ── Auth: state listener ─────────────────────────────────────────
     auth.onAuthStateChanged(async (user) => {
       if (!user) {
@@ -3242,6 +3283,7 @@
         userEmailEl.textContent = "";
         usersTabBtn.hidden = true;
         allTabBtn.hidden = true;
+        bellBtn.hidden = true;
         currentUserDoc = null;
         setAuthMode("login");
         showOnly(loginView);
@@ -3289,6 +3331,7 @@
 
       const data = userDoc.data() || {};
       currentUserDoc = data;
+      refreshBellUI();
       if (data.role === "admin") {
         applyPermissions("admin", {});
         applyEmployeePermissions("admin", {});
