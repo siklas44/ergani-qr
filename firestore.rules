@@ -55,16 +55,8 @@ service cloud.firestore {
          ))
       );
 
-      // Update:
-      //  - admin: anything
-      //  - self: only own fcmToken + notificationsEnabled (push registration)
-      allow update: if isAdmin()
-        || (request.auth.uid == uid
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['fcmToken', 'notificationsEnabled']));
-
-      // Delete: admin only
-      allow delete: if isAdmin();
+      // Update / delete: admin only
+      allow update, delete: if isAdmin();
     }
 
     // ─── /stores/{storeId} ────────────────────────────────────

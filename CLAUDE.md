@@ -53,7 +53,7 @@ Multi-store, role-based (admin / manager / cashier).
 ```
 
 ## Files
-- `index.html` — main app (~3050 γραμμές)
+- `index.html` — main app (~2900 γραμμές)
 - `firestore.rules` — security rules (apply to Firebase Console manually)
 - `manifest.json` — PWA manifest για Add-to-Home-Screen
 - `lib/jsQR.js` — vendored QR scanner (camera decode)
@@ -63,6 +63,10 @@ Multi-store, role-based (admin / manager / cashier).
 - `icons/preview.html` — preview των 3 logo options
 - `CLAUDE.md` — project instructions
 - `STATE.md` — current progress
+
+## Notable removals
+- 2026-05-07: αφαιρέθηκαν Cloud Functions / FCM / push notifications
+  (FCM επέστρεφε success αλλά browser/OS δεν εμφάνιζε τα notifications).
 
 ## Schedule data model
 Per employee schedule field:

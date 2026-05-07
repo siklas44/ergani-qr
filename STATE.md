@@ -1,6 +1,6 @@
 # STATE — Πού είμαστε
 
-> Τελευταία ενημέρωση: 2026-04-29
+> Τελευταία ενημέρωση: 2026-05-07
 
 ## ✅ Έτοιμα
 
@@ -71,6 +71,17 @@
 - [x] `firestore.rules` deployed (admin/manager/cashier path)
 - [x] Helpers: hasStore, hasPermission, isAdmin, isBootstrapAdmin
 - [x] User must republish στο Firebase Console όποτε αλλάζουν
+
+## 🧹 Αφαιρέθηκαν (2026-05-07)
+- ❌ **Push notifications / FCM / Cloud Functions** — αποτελέσματα FCM `sent=1` αλλά τα notifications δεν έφταναν στον χρήστη (browser/OS layer).
+  Αφαιρέθηκαν: `functions/`, `firebase.json`, `.firebaserc`, `firebase-messaging-sw.js`,
+  `.github/workflows/deploy-functions.yml`, καμπανάκι, FCM client setup, per-store
+  recipients UI, σχετικοί Firestore rules.
+- Αν χρειαστεί ποτέ ξανά: ο user μπορεί να καθαρίσει manually:
+  - Firebase Console → Functions → delete `scheduleReminders`
+  - Cloud Scheduler → delete `firebase-schedule-...`
+  - GitHub → Secrets → delete `FIREBASE_SERVICE_ACCOUNT`
+  - Firebase plan → downgrade σε Spark (αν θέλει)
 
 ## 📋 Επόμενα candidates
 - [ ] Bookmarklet «1-click extract» από Εργάνη σελίδα

@@ -18,7 +18,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     :root {
@@ -942,20 +941,6 @@
     }
     .store-header:first-child { padding-top: 4px; }
 
-    /* Bell toggle in header */
-    .bell-btn {
-      background: rgba(255,255,255,0.18);
-      color: #fff;
-      border: none;
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 0.95rem;
-      cursor: pointer;
-      margin-right: 6px;
-    }
-    .bell-btn:active { background: rgba(255,255,255,0.3); }
-    .bell-btn.on { background: rgba(255,255,255,0.32); }
-
     /* Hide schedule-import button on small screens (paste from Excel needs a real keyboard) */
     @media (max-width: 768px) {
       #schedImportBtn { display: none !important; }
@@ -1019,7 +1004,6 @@
       <div class="subtitle">Πίνακας διαχείρισης</div>
       <div class="user-badge">
         <span class="email" id="userEmail"></span>
-        <button class="bell-btn" id="bellBtn" title="Ειδοποιήσεις" hidden>🔕</button>
         <button class="logout-btn" id="logoutBtn">Αποσύνδεση</button>
       </div>
     </header>
@@ -1108,15 +1092,6 @@
         <div class="form-group">
           <label for="storeAddress">Διεύθυνση (προαιρετική)</label>
           <input type="text" id="storeAddress" maxlength="200" autocomplete="off" />
-        </div>
-        <div class="form-group">
-          <label>🔔 Reminders προς:</label>
-          <div class="check-group" id="storeNotifyGroup">
-            <div class="hint">Δεν υπάρχουν χρήστες ακόμα.</div>
-          </div>
-          <div class="hint" style="margin-top:6px;">
-            Θα λάβουν push notification 10 λεπτά πριν την έναρξη/λήξη κάθε εργαζόμενου.
-          </div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="storeCancelBtn">Άκυρο</button>
@@ -1303,12 +1278,6 @@
     const secondaryAuth = secondaryApp.auth();
     secondaryAuth.setPersistence(firebase.auth.Auth.Persistence.NONE);
 
-    // FCM messaging — only used when supported (https + service worker)
-    const messaging = firebase.messaging.isSupported() ? firebase.messaging() : null;
-    // VAPID public key — generate at: Firebase Console → Project Settings →
-    // Cloud Messaging → Web Push certificates → Generate key pair
-    const FCM_VAPID_KEY = "BNc2mZaPJg8KHtm3tumCmRLzYMNVvYAmBaxVZUXlHUMfgu9_XN_yDIVHljsdY8eY8uYgTaig3XKfHY2TIEflQFY";
-
     const BOOTSTRAP_ADMIN_EMAIL = "siklas44@gmail.com";
 
     const PERM_KEYS = ["viewEmployees","showQR","scanQR","addEmployees","editEmployees","deleteEmployees","tickDays"];
@@ -1334,7 +1303,6 @@
     const authInfo    = $("authInfo");
     const userEmailEl = $("userEmail");
     const logoutBtn   = $("logoutBtn");
-    const bellBtn     = $("bellBtn");
     const pendingLogoutBtn = $("pendingLogoutBtn");
     // Stores tab
     const storesTab     = $("storesTab");
@@ -1346,7 +1314,6 @@
     const storeAddressInput = $("storeAddress");
     const storeCancelBtn= $("storeCancelBtn");
     const storeModalTitle = $("storeModalTitle");
-    const storeNotifyGroup = $("storeNotifyGroup");
     // Employees tab
     const employeesTab  = $("employeesTab");
     const storeSelector = $("storeSelector");
@@ -1741,20 +1708,18 @@
     }
 
     // ── CRUD: stores ─────────────────────────────────────────────────
-    async function saveStore(name, address, notifyUserIds) {
+    async function saveStore(name, address) {
       try {
         if (editingStoreId) {
           await db.collection("stores").doc(editingStoreId).update({
             name: name.trim(),
             address: address.trim() || null,
-            notifyUserIds: notifyUserIds || [],
           });
           showToast("Το κατάστημα ενημερώθηκε");
         } else {
           await db.collection("stores").add({
             name: name.trim(),
             address: address.trim() || null,
-            notifyUserIds: notifyUserIds || [],
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             createdBy: auth.currentUser ? auth.currentUser.uid : null,
           });
@@ -2680,41 +2645,19 @@
     }
 
     // ── Modal: store ─────────────────────────────────────────────────
-    function renderStoreNotifyCheckboxes(selectedIds) {
-      // Show all non-pending users (admins, managers, cashiers) as candidate recipients
-      const candidates = users.filter((u) => u.role && u.role !== null);
-      if (!candidates.length) {
-        storeNotifyGroup.innerHTML = `<div class="hint">Δεν υπάρχουν χρήστες ακόμα. Πρόσθεσε στο tab «Χρήστες».</div>`;
-        return;
-      }
-      const labelOf = (u) => {
-        const role = u.role === "admin" ? "Admin" : u.role === "manager" ? "Υπεύθυνος" : "Ταμίας";
-        return escapeHtml((u.name || u.email || "?")) + ` <span style="color:var(--muted);font-size:0.78rem">(${role})</span>`;
-      };
-      storeNotifyGroup.innerHTML = candidates.map((u) =>
-        `<label class="check-row"><input type="checkbox" value="${u.id}" ${(selectedIds || []).includes(u.id) ? "checked" : ""}> ${labelOf(u)}</label>`
-      ).join("");
-    }
-    function getSelectedNotifyIds() {
-      return Array.from(storeNotifyGroup.querySelectorAll('input[type="checkbox"]:checked')).map((c) => c.value);
-    }
-
     function openStoreModal(storeId) {
       editingStoreId = storeId || null;
       storeForm.reset();
-      let notifyIds = [];
       if (storeId) {
         const s = stores.find((x) => x.id === storeId);
         if (s) {
           storeNameInput.value = s.name || "";
           storeAddressInput.value = s.address || "";
-          notifyIds = Array.isArray(s.notifyUserIds) ? s.notifyUserIds : [];
         }
         storeModalTitle.textContent = "Επεξεργασία Καταστήματος";
       } else {
         storeModalTitle.textContent = "Νέο Κατάστημα";
       }
-      renderStoreNotifyCheckboxes(notifyIds);
       storeModal.classList.add("open");
       setTimeout(() => storeNameInput.focus(), 100);
     }
@@ -3009,7 +2952,7 @@
       const name = storeNameInput.value.trim();
       const address = storeAddressInput.value.trim();
       if (!name) return;
-      await saveStore(name, address, getSelectedNotifyIds());
+      await saveStore(name, address);
       closeStoreModal();
     });
     storesListEl.addEventListener("click", (e) => {
@@ -3215,101 +3158,6 @@
     logoutBtn.addEventListener("click", () => auth.signOut());
     pendingLogoutBtn.addEventListener("click", () => auth.signOut());
 
-    // ── FCM push notifications ───────────────────────────────────────
-    let swRegistration = null;
-    async function registerSW() {
-      if (swRegistration) return swRegistration;
-      if (!("serviceWorker" in navigator)) return null;
-      try {
-        // SW path is relative to the page; the file lives at site root
-        swRegistration = await navigator.serviceWorker.register("firebase-messaging-sw.js");
-        return swRegistration;
-      } catch (e) {
-        console.error("SW register failed:", e);
-        return null;
-      }
-    }
-
-    async function enablePush(uid) {
-      if (!messaging) { showToast("Ο browser δεν υποστηρίζει push"); return false; }
-      if (FCM_VAPID_KEY.startsWith("REPLACE_")) {
-        showToast("Λείπει το VAPID key — ενημέρωσε admin");
-        return false;
-      }
-      const reg = await registerSW();
-      if (!reg) { showToast("Δεν εγκαταστάθηκε service worker"); return false; }
-      try {
-        const perm = await Notification.requestPermission();
-        if (perm !== "granted") { showToast("Δεν δόθηκε άδεια ειδοποιήσεων"); return false; }
-        const token = await messaging.getToken({
-          vapidKey: FCM_VAPID_KEY,
-          serviceWorkerRegistration: reg,
-        });
-        if (!token) { showToast("Δεν αποκτήθηκε token push"); return false; }
-        await db.collection("users").doc(uid).update({
-          fcmToken: token,
-          notificationsEnabled: true,
-        });
-        showToast("Ειδοποιήσεις ενεργοποιήθηκαν");
-        return true;
-      } catch (err) {
-        console.error("enablePush failed:", err);
-        showToast("Σφάλμα ενεργοποίησης: " + (err.code || err.message));
-        return false;
-      }
-    }
-
-    async function disablePush(uid) {
-      try {
-        await db.collection("users").doc(uid).update({
-          fcmToken: firebase.firestore.FieldValue.delete(),
-          notificationsEnabled: false,
-        });
-        if (messaging && messaging.deleteToken) {
-          try { await messaging.deleteToken(); } catch (e) {}
-        }
-        showToast("Ειδοποιήσεις απενεργοποιήθηκαν");
-        return true;
-      } catch (err) {
-        console.error("disablePush failed:", err);
-        showToast("Σφάλμα: " + (err.code || err.message));
-        return false;
-      }
-    }
-
-    if (messaging) {
-      messaging.onMessage((payload) => {
-        const t = (payload.notification && payload.notification.title) || "";
-        const b = (payload.notification && payload.notification.body)  || "";
-        showToast(t + (b ? " — " + b : ""));
-      });
-    }
-
-    function refreshBellUI() {
-      if (!messaging) { bellBtn.hidden = true; return; }
-      bellBtn.hidden = false;
-      const enabled = !!(currentUserDoc && currentUserDoc.notificationsEnabled);
-      bellBtn.textContent = enabled ? "🔔" : "🔕";
-      bellBtn.classList.toggle("on", enabled);
-      bellBtn.title = enabled ? "Ειδοποιήσεις: ΕΝΕΡΓΕΣ — πάτα για απενεργοποίηση"
-                              : "Ειδοποιήσεις: ΑΝΕΝΕΡΓΕΣ — πάτα για ενεργοποίηση";
-    }
-
-    bellBtn.addEventListener("click", async () => {
-      const u = auth.currentUser;
-      if (!u) return;
-      const enabled = !!(currentUserDoc && currentUserDoc.notificationsEnabled);
-      if (enabled) {
-        if (!confirm("Είσαι σίγουρος ότι θέλεις να απενεργοποιήσεις τις ειδοποιήσεις; Δεν θα λαμβάνεις πλέον reminders ωραρίων.")) return;
-        const ok = await disablePush(u.uid);
-        if (ok && currentUserDoc) currentUserDoc.notificationsEnabled = false;
-      } else {
-        const ok = await enablePush(u.uid);
-        if (ok && currentUserDoc) currentUserDoc.notificationsEnabled = true;
-      }
-      refreshBellUI();
-    });
-
     // ── Auth: state listener ─────────────────────────────────────────
     auth.onAuthStateChanged(async (user) => {
       if (!user) {
@@ -3317,7 +3165,6 @@
         userEmailEl.textContent = "";
         usersTabBtn.hidden = true;
         allTabBtn.hidden = true;
-        bellBtn.hidden = true;
         currentUserDoc = null;
         setAuthMode("login");
         showOnly(loginView);
@@ -3365,7 +3212,6 @@
 
       const data = userDoc.data() || {};
       currentUserDoc = data;
-      refreshBellUI();
       if (data.role === "admin") {
         applyPermissions("admin", {});
         applyEmployeePermissions("admin", {});
