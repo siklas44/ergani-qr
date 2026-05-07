@@ -42,4 +42,4 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/firebase-key.json" >> $GITHUB_ENV
 
       - name: Deploy functions
-        run: firebase deploy --only functions --project ergani44 --non-interactive
+        run: firebase deploy --only functions --project ergani44 --non-interactive --force
