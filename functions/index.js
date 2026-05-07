@@ -62,7 +62,6 @@ async function sendPush(tokens, title, body, data) {
 
 exports.scheduleReminders = functions
   .region("europe-west1")
-  .runWith({ memory: "256MB" })
   .pubsub.schedule("every 5 minutes")
   .timeZone("Europe/Athens")
   .onRun(async () => {
