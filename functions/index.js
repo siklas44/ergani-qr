@@ -9,7 +9,8 @@
 //   /stores/{storeId}/employees/{empId} { name, schedule: { mon:{from,to|off}, ... } }
 //   /users/{uid} { fcmToken, notificationsEnabled, storeIds }
 
-const functions = require("firebase-functions/v1");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { logger }     = require("firebase-functions");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore }  = require("firebase-admin/firestore");
 const { getMessaging }  = require("firebase-admin/messaging");
@@ -60,14 +61,16 @@ async function sendPush(tokens, title, body, data) {
   return { success: res.successCount, failure: res.failureCount };
 }
 
-exports.scheduleReminders = functions
-  .region("europe-west1")
-  .pubsub.schedule("every 5 minutes")
-  .timeZone("Europe/Athens")
-  .onRun(async () => {
+exports.scheduleReminders = onSchedule(
+  {
+    schedule: "every 5 minutes",
+    timeZone: "Europe/Athens",
+    region: "europe-west1",
+  },
+  async () => {
     const now = new Date();
     const { weekday, hh, mm } = localParts(now);
-    functions.logger.info(`tick @ ${now.toISOString()} → weekday=${weekday} ${hh}:${mm}`);
+    logger.info(`tick @ ${now.toISOString()} → weekday=${weekday} ${hh}:${mm}`);
 
     // 1) Load all stores that have at least one notify recipient
     const storesSnap = await db.collection("stores").get();
@@ -118,7 +121,7 @@ exports.scheduleReminders = functions
             { type: "shift-start", storeId: storeDoc.id, empId: empDoc.id }
           );
           totalSent += r.success;
-          functions.logger.info("start reminder " + (emp.name || "?") + " sent=" + r.success);
+          logger.info("start reminder " + (emp.name || "?") + " sent=" + r.success);
         }
         if (fires(endDelta)) {
           const r = await sendPush(
@@ -129,11 +132,12 @@ exports.scheduleReminders = functions
             { type: "shift-end", storeId: storeDoc.id, empId: empDoc.id }
           );
           totalSent += r.success;
-          functions.logger.info("end reminder " + (emp.name || "?") + " sent=" + r.success);
+          logger.info("end reminder " + (emp.name || "?") + " sent=" + r.success);
         }
       }
     }
 
-    functions.logger.info(`done — scanned ${totalScanned} employees, sent ${totalSent} pushes`);
+    logger.info(`done — scanned ${totalScanned} employees, sent ${totalSent} pushes`);
     return null;
-  });
+  }
+);
