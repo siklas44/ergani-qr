@@ -9,7 +9,7 @@
 //   /stores/{storeId}/employees/{empId} { name, schedule: { mon:{from,to|off}, ... } }
 //   /users/{uid} { fcmToken, notificationsEnabled, storeIds }
 
-const functions = require("firebase-functions");
+const functions = require("firebase-functions/v1");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore }  = require("firebase-admin/firestore");
 const { getMessaging }  = require("firebase-admin/messaging");
