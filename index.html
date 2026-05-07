@@ -883,14 +883,14 @@
     }
     .tick-box {
       flex: 1;
-      padding: 14px 4px;
+      padding: 10px 2px;
       min-height: 44px;
       background: #fff;
       border: 1px solid var(--border);
       border-radius: 8px;
-      font-size: 0.7rem;
-      font-weight: 400;
-      color: #e5e7eb;
+      font-size: 0.62rem;
+      font-weight: 500;
+      color: #9ca3af;
       cursor: pointer;
       user-select: none;
       -webkit-user-select: none;
@@ -899,19 +899,29 @@
       transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.05s;
       text-align: center;
       font-family: inherit;
+      line-height: 1.1;
     }
     .tick-box:active { transform: scale(0.95); }
     .tick-box.checked {
       background: var(--primary);
       border-color: var(--primary);
       color: #fff;
-      font-weight: 600;
+      font-weight: 700;
     }
     .tick-box.checked-x {
       background: #fee2e2;
       border-color: #dc2626;
-      color: #dc2626;
+      color: #991b1b;
       font-weight: 700;
+    }
+    .tick-box.off-day {
+      background: #f3f4f6;
+      color: #9ca3af;
+      font-style: italic;
+    }
+    .tick-box.off-day.checked,
+    .tick-box.off-day.checked-x {
+      font-style: normal;
     }
     .tick-box[disabled] {
       opacity: 0.6;
@@ -1514,7 +1524,9 @@
         const editable = canEditTicks();
         const tickBoxes = TICK_DAYS.map((d) => {
           const state = tickStateOf(ticks[d.key]);
-          return `<button type="button" class="tick-box ${tickClassFor(state)}" data-day="${d.key}" data-tick-emp="${e.id}" data-day-label="${d.label}" ${editable ? "" : "disabled"}>${tickLabelFor(state, d.label)}</button>`;
+          const lbl = dayLabelFor(e, d.key);
+          const cls = ["tick-box", tickClassFor(state), lbl.off ? "off-day" : ""].filter(Boolean).join(" ");
+          return `<button type="button" class="${cls}" data-day="${d.key}" data-tick-emp="${e.id}" data-day-label="${escapeHtml(lbl.text)}" ${editable ? "" : "disabled"}>${escapeHtml(lbl.text)}</button>`;
         }).join("");
         return `
         <div class="employee" data-id="${e.id}">
@@ -1536,14 +1548,14 @@
           e.preventDefault();
           e.stopPropagation();
           if (this.disabled) return;
-          // Optimistic UI: cycle the visual immediately
+          // Optimistic UI: cycle the visual immediately. Hours/labels stay visible.
           const cur = this.classList.contains("checked") ? "tick"
                     : this.classList.contains("checked-x") ? "x" : "";
           const nxt = nextTickState(cur);
           this.classList.remove("checked", "checked-x");
           if (nxt === "tick") this.classList.add("checked");
           else if (nxt === "x") this.classList.add("checked-x");
-          this.textContent = tickLabelFor(nxt, this.dataset.dayLabel);
+          // Keep the schedule label inside the box at all states
           toggleWeekTick(this.dataset.tickEmp, this.dataset.day);
         });
       });
@@ -1823,7 +1835,9 @@
         const ticks = getActiveWeekTicks(e);
         const tickBoxes = TICK_DAYS.map((d) => {
           const state = tickStateOf(ticks[d.key]);
-          return `<button type="button" class="tick-box ${tickClassFor(state)}" data-day="${d.key}" data-tick-emp="${e.id}" data-tick-store="${e.storeId}" data-day-label="${d.label}">${tickLabelFor(state, d.label)}</button>`;
+          const lbl = dayLabelFor(e, d.key);
+          const cls = ["tick-box", tickClassFor(state), lbl.off ? "off-day" : ""].filter(Boolean).join(" ");
+          return `<button type="button" class="${cls}" data-day="${d.key}" data-tick-emp="${e.id}" data-tick-store="${e.storeId}" data-day-label="${escapeHtml(lbl.text)}">${escapeHtml(lbl.text)}</button>`;
         }).join("");
         parts.push(`
         <div class="employee" data-id="${e.id}">
@@ -1844,15 +1858,13 @@
         btn.addEventListener("click", function (e) {
           e.preventDefault();
           e.stopPropagation();
-          // Optimistic visual
           const cur = this.classList.contains("checked") ? "tick"
                     : this.classList.contains("checked-x") ? "x" : "";
           const nxt = nextTickState(cur);
           this.classList.remove("checked", "checked-x");
           if (nxt === "tick") this.classList.add("checked");
           else if (nxt === "x") this.classList.add("checked-x");
-          this.textContent = tickLabelFor(nxt, this.dataset.dayLabel);
-          // Find current emp object to pass to cycleWeekTick
+          // Hours/labels stay visible; only background/border changes
           const empObj = allEmployees.find((x) => x.id === this.dataset.tickEmp && x.storeId === this.dataset.tickStore);
           cycleWeekTick(this.dataset.tickStore, this.dataset.tickEmp, this.dataset.day, empObj);
         });
@@ -2595,6 +2607,23 @@
       if (state === "tick") return "✓";
       if (state === "x")    return "✗";
       return dayLabel;
+    }
+
+    // Compact "10:00"→"10", "10:30" stays. Returns the from-to label like "10-18" or "10:30-18".
+    function compactHours(from, to) {
+      if (!from || !to) return "";
+      const c = (s) => (s.endsWith(":00") ? s.slice(0, -3) : s);
+      return c(from) + "-" + c(to);
+    }
+    // Get the schedule cell label/state for an employee on a given day key.
+    function dayLabelFor(emp, dayKey) {
+      const sched = emp && emp.schedule && emp.schedule[dayKey];
+      if (sched && sched.from && sched.to && !sched.off) {
+        return { text: compactHours(sched.from, sched.to), off: false };
+      }
+      if (sched && sched.off) return { text: "ΡΕΠ", off: true };
+      const def = TICK_DAYS.find((x) => x.key === dayKey);
+      return { text: def ? def.label : "", off: false };
     }
 
     function canEditTicks() {
