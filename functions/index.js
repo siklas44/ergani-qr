@@ -3,6 +3,7 @@
 // Scheduled function checks every 5 minutes for employee shifts that
 // are about to start or end (±10 minutes window) and sends an FCM push
 // notification to the users assigned to that store as recipients.
+// (re-deploy trigger to ensure Cloud Scheduler job is created)
 //
 // Data model expected:
 //   /stores/{storeId} { name, notifyUserIds: [uid] }
