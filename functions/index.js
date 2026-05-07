@@ -24,13 +24,23 @@ const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]; // JS getDay
 // Window in minutes either side of the shift boundary that triggers a reminder.
 const WINDOW_MIN = 10;
 
-// Athens-local "now" parts (a basic implementation; assumes Europe/Athens TZ on the function)
+// Athens-local "now" parts. The function's `timeZone` config only controls
+// WHEN the cron fires — JS Date methods still use UTC. So we format explicitly
+// for Europe/Athens to get the right weekday + hours/minutes.
 function localParts(d) {
-  return {
-    weekday: DAY_KEYS[d.getDay()],
-    hh: d.getHours(),
-    mm: d.getMinutes(),
-  };
+  const tz = "Europe/Athens";
+  const dayShort = d
+    .toLocaleDateString("en-US", { timeZone: tz, weekday: "short" })
+    .slice(0, 3)
+    .toLowerCase(); // "mon" / "tue" / ...
+  const time = d.toLocaleTimeString("en-GB", {
+    timeZone: tz,
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+  }); // "10:35"
+  const [hh, mm] = time.split(":").map(Number);
+  return { weekday: dayShort, hh, mm };
 }
 
 function diffMinutes(targetH, targetM, nowH, nowM) {
