@@ -18,6 +18,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     :root {
@@ -1277,6 +1278,12 @@
     const secondaryApp  = firebase.initializeApp(firebaseConfig, "secondary");
     const secondaryAuth = secondaryApp.auth();
     secondaryAuth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+
+    // FCM messaging — only used when supported (https + service worker)
+    const messaging = firebase.messaging.isSupported() ? firebase.messaging() : null;
+    // VAPID public key — generate at: Firebase Console → Project Settings →
+    // Cloud Messaging → Web Push certificates → Generate key pair
+    const FCM_VAPID_KEY = "REPLACE_WITH_YOUR_VAPID_PUBLIC_KEY";
 
     const BOOTSTRAP_ADMIN_EMAIL = "siklas44@gmail.com";
 
@@ -3157,6 +3164,76 @@
 
     logoutBtn.addEventListener("click", () => auth.signOut());
     pendingLogoutBtn.addEventListener("click", () => auth.signOut());
+
+    // ── FCM push notifications ───────────────────────────────────────
+    let swRegistration = null;
+    async function registerSW() {
+      if (swRegistration) return swRegistration;
+      if (!("serviceWorker" in navigator)) return null;
+      try {
+        // SW path is relative to the page; the file lives at site root
+        swRegistration = await navigator.serviceWorker.register("firebase-messaging-sw.js");
+        return swRegistration;
+      } catch (e) {
+        console.error("SW register failed:", e);
+        return null;
+      }
+    }
+
+    async function enablePush(uid) {
+      if (!messaging) { showToast("Ο browser δεν υποστηρίζει push"); return false; }
+      if (FCM_VAPID_KEY.startsWith("REPLACE_")) {
+        showToast("Λείπει το VAPID key — ενημέρωσε admin");
+        return false;
+      }
+      const reg = await registerSW();
+      if (!reg) { showToast("Δεν εγκαταστάθηκε service worker"); return false; }
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") { showToast("Δεν δόθηκε άδεια ειδοποιήσεων"); return false; }
+        const token = await messaging.getToken({
+          vapidKey: FCM_VAPID_KEY,
+          serviceWorkerRegistration: reg,
+        });
+        if (!token) { showToast("Δεν αποκτήθηκε token push"); return false; }
+        await db.collection("users").doc(uid).update({
+          fcmToken: token,
+          notificationsEnabled: true,
+        });
+        showToast("Ειδοποιήσεις ενεργοποιήθηκαν");
+        return true;
+      } catch (err) {
+        console.error("enablePush failed:", err);
+        showToast("Σφάλμα ενεργοποίησης: " + (err.code || err.message));
+        return false;
+      }
+    }
+
+    async function disablePush(uid) {
+      try {
+        await db.collection("users").doc(uid).update({
+          fcmToken: firebase.firestore.FieldValue.delete(),
+          notificationsEnabled: false,
+        });
+        if (messaging && messaging.deleteToken) {
+          try { await messaging.deleteToken(); } catch (e) {}
+        }
+        showToast("Ειδοποιήσεις απενεργοποιήθηκαν");
+        return true;
+      } catch (err) {
+        console.error("disablePush failed:", err);
+        showToast("Σφάλμα: " + (err.code || err.message));
+        return false;
+      }
+    }
+
+    if (messaging) {
+      messaging.onMessage((payload) => {
+        const t = (payload.notification && payload.notification.title) || "";
+        const b = (payload.notification && payload.notification.body)  || "";
+        showToast(t + (b ? " — " + b : ""));
+      });
+    }
 
     // ── Auth: state listener ─────────────────────────────────────────
     auth.onAuthStateChanged(async (user) => {
