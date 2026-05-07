@@ -53,12 +53,43 @@ Multi-store, role-based (admin / manager / cashier).
 ```
 
 ## Files
-- `index.html` — main app (~2700 γραμμές)
+- `index.html` — main app (~3050 γραμμές)
 - `firestore.rules` — security rules (apply to Firebase Console manually)
+- `manifest.json` — PWA manifest για Add-to-Home-Screen
 - `lib/jsQR.js` — vendored QR scanner (camera decode)
 - `lib/qrcode-gen.js` — vendored QR generator (UTF-8-safe display)
+- `icons/logo-1-monogram.svg` — εικονίδιο εφαρμογής (επιλεγμένο)
+- `icons/icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, `favicon-32.png`
+- `icons/preview.html` — preview των 3 logo options
 - `CLAUDE.md` — project instructions
 - `STATE.md` — current progress
+
+## Schedule data model
+Per employee schedule field:
+```
+schedule: {
+  mon: { from: "09:00", to: "17:00" } | { off: true },
+  tue: ...,
+  ...
+  sun: ...
+}
+```
+
+Per employee weekly tick boxes (auto-reset Δευτέρα):
+```
+weekTicks: {
+  weekId: "2026-W17",   // ISO week
+  days: { mon: "tick" | "x" | "" }
+}
+```
+
+## Ergani import format (Excel paste)
+Tab-separated rows with schedule string in one column:
+```
+NAME (CODE)\tEDRA\tDATE\t\tFixed\t ΔΕ HH:MM-HH:MM, ΤΡ ΑΝΑΠ, ...\tSentToErgani\t...
+```
+Day codes: ΔΕ→mon, ΤΡ→tue, ΤΕ→wed, ΠΕ→thu, ΠΑ→fri, ΣΑ→sat, ΚΥ→sun
+Cell values: HH:MM-HH:MM (work) / ΑΝΑΠ / ΜΗ-ΕΡΓ (off)
 
 ## Conventions
 - Γλώσσα UI: **Ελληνικά**

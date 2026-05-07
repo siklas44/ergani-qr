@@ -1,6 +1,6 @@
 # STATE — Πού είμαστε
 
-> Τελευταία ενημέρωση: 2026-04-26
+> Τελευταία ενημέρωση: 2026-04-29
 
 ## ✅ Έτοιμα
 
@@ -41,25 +41,46 @@
 - [x] Auto-select αν 1 κατάστημα
 - [x] Permission gating: εμφάνιση/απόκρυψη κουμπιών (📷, ✏️, 🗑️, 📱) με βάση δικαιώματα
 
-### Φάση 3 — Employee features
+### Φάση 3 — Employee features + tracking
 - [x] Detail view (tap κάρτα): avatar, όνομα, ωράριο, κωδικός
 - [x] **Δομημένο εβδομαδιαίο πρόγραμμα** (Δευ-Κυρ + ώρες + Ρεπό checkbox)
 - [x] QR display μόνο μέσω 📱 button (ξεχωριστό από detail)
 - [x] Backwards-compat για παλιά string schedule
+- [x] **7 weekly tick boxes** ανά εργαζόμενο (κάτω από κάθε γραμμή)
+- [x] Tri-state ticks: empty → ✓ μπλε → ✗ κόκκινο → empty
+- [x] Auto-reset κάθε Δευτέρα (ISO week-id check)
+- [x] Permission `tickDays` για cashiers (Firestore rule allows weekTicks-only update)
+- [x] **Ωράρια εμφανείς μέσα στα κουτάκια** (10-18 / ΡΕΠ) — ώρες παραμένουν ορατές με tick
+- [x] Νέο tab «📋 Όλοι» admin: όλοι οι εργαζόμενοι όλων των καταστημάτων με headers ανά store
+- [x] **Εισαγωγή ωραρίων από Εργάνη** (paste από Excel) — desktop only, hidden on mobile
+- [x] Parser για Ergani format `ΔΕ X, ΤΡ Y, ...` με `ΑΝΑΠ`/`ΜΗ-ΕΡΓ` mapping
+- [x] Match by name (case-insensitive, two word orders), preview πριν εφαρμογή
+- [x] Skip παλιών εργαζομένων που δεν είναι στη βάση
+- [x] Edit + Delete actions μετακινήθηκαν μέσα στο detail card
+- [x] Auto-select store on first load αν υπάρχει 1 μόνο
+- [x] Hide search/buttons όταν δεν έχει επιλεγεί κατάστημα
+
+### Logo & PWA
+- [x] 3 SVG λογότυπα designed (icons/logo-1-monogram.svg κλπ)
+- [x] Επιλέχθηκε **#1: ΕQ Monogram** (μπλε→μωβ gradient)
+- [x] manifest.json για PWA install
+- [x] PNG sizes: 192/512/180 (apple-touch) + 32 favicon — via rsvg-convert
+- [x] Add-to-Home-Screen δουλεύει σε iPhone Safari + Android Chrome
 
 ### Firestore Security Rules
 - [x] `firestore.rules` deployed (admin/manager/cashier path)
 - [x] Helpers: hasStore, hasPermission, isAdmin, isBootstrapAdmin
 - [x] User must republish στο Firebase Console όποτε αλλάζουν
 
-## 📋 Επόμενα candidates (Φάση 3+)
-- [ ] **Καθολικό weekly schedule dashboard** (όλοι οι εργαζόμενοι σε ένα grid)
+## 📋 Επόμενα candidates
+- [ ] Bookmarklet «1-click extract» από Εργάνη σελίδα
+- [ ] Direct Ergani API integration (μεγάλο project, χρειάζεται backend)
 - [ ] Templates ωραρίων (πρωί/απόγευμα/πλήρες)
 - [ ] Μαζική εφαρμογή ωραρίου (σε πολλούς ταυτόχρονα)
-- [ ] 🟢/⚪ IN/OUT indicator + ιστορικό σαρώσεων
+- [ ] 🟢/⚪ IN/OUT clock-in tracking με Firestore clockEvents
 - [ ] 💾 Export QR ως PNG για εκτύπωση
-- [ ] 🌐 PWA / offline mode
-- [ ] 📊 Στατιστικά (πόσοι σκαναρίστηκαν σήμερα)
+- [ ] 🌐 PWA / offline service worker
+- [ ] 📊 Στατιστικά εβδομάδας (πόσοι σκαναρίστηκαν, παρουσίες)
 - [ ] Επανα-ενεργοποίηση μαζικής εισαγωγής CSV (αν χρειαστεί)
 
 ## 🔑 Decisions Log
@@ -72,6 +93,10 @@
 - **QR libraries**: vendored locally (lib/) — user network δεν έφτανε σε jsdelivr/unpkg
 - **QR generator**: qrcode-generator (Kazuhiko Arase) λόγω UTF-8 bug στο qrcodejs
 - **Old `employees` flat collection**: orphan junk — αγνοείται
+- **Tick boxes**: tri-state + ώρες ορατές, auto-reset Δευ via ISO weekId
+- **Schedule import**: paste από Εργάνη Excel (tab-separated), match by name, desktop only
+- **Logo**: SVG bundled + PNG via rsvg-convert για apple-touch-icon
+- **Mobile**: schedule import κρυμμένο, χειροκίνητη επεξεργασία στην καρτέλα εργαζομένου
 
 ## ⚠️ User-side actions
 - [x] Firebase Console → Authentication → Email/Password → Enable
