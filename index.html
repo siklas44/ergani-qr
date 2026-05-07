@@ -1027,6 +1027,7 @@
         <div class="search-box">
           <input type="search" id="allSearch" placeholder="Αναζήτηση εργαζόμενου ή καταστήματος..." autocomplete="off" />
         </div>
+        <button class="secondary-btn" id="schedImportBtn">📅 Εισαγωγή ωραρίων από Εργάνη</button>
         <div class="list" id="allList"></div>
       </section>
 
@@ -1176,6 +1177,30 @@
           <button type="submit" class="btn btn-primary" id="userSaveBtn">Αποθήκευση</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Schedule import modal (paste from Εργάνη Excel) -->
+  <div class="modal" id="schedImportModal">
+    <div class="modal-content">
+      <h2>Εισαγωγή ωραρίων από Εργάνη</h2>
+      <p class="hint">
+        Από την Εργάνη: άνοιξε τον πίνακα ωραρίων, επίλεξε γραμμές, αντίγραψε (Cmd+C / Ctrl+C) και
+        επικόλλησε εδώ. Ή ανέβασε αρχείο .txt/.csv. Παλιοί εργαζόμενοι που δεν είναι στη βάση
+        <strong>παραλείπονται αυτόματα</strong>.
+      </p>
+      <textarea id="schedImportText" placeholder="ΟΝΟΜΑ (ΚΩΔ)&#9;ΕΔΡΑ&#9;05.05.2026&#9;&#9;Fixed&#9; ΔΕ ΜΗ-ΕΡΓ, ΤΡ ΜΗ-ΕΡΓ, ..."></textarea>
+      <div class="form-group" style="margin-top:10px;">
+        <label for="schedImportFile">Ή αρχείο TXT/CSV:</label>
+        <input type="file" id="schedImportFile" accept=".csv,.txt,text/csv,text/plain" />
+      </div>
+      <div class="import-preview" id="schedImportPreview">
+        Επικόλλησε γραμμές παραπάνω για προεπισκόπηση.
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="schedImportCancelBtn">Άκυρο</button>
+        <button type="button" class="btn btn-primary" id="schedImportDoBtn" disabled>Εισαγωγή</button>
+      </div>
     </div>
   </div>
 
