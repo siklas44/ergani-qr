@@ -1109,6 +1109,15 @@
           <label for="storeAddress">Διεύθυνση (προαιρετική)</label>
           <input type="text" id="storeAddress" maxlength="200" autocomplete="off" />
         </div>
+        <div class="form-group">
+          <label>🔔 Reminders προς:</label>
+          <div class="check-group" id="storeNotifyGroup">
+            <div class="hint">Δεν υπάρχουν χρήστες ακόμα.</div>
+          </div>
+          <div class="hint" style="margin-top:6px;">
+            Θα λάβουν push notification 10 λεπτά πριν την έναρξη/λήξη κάθε εργαζόμενου.
+          </div>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="storeCancelBtn">Άκυρο</button>
           <button type="submit" class="btn btn-primary">Αποθήκευση</button>
@@ -1337,6 +1346,7 @@
     const storeAddressInput = $("storeAddress");
     const storeCancelBtn= $("storeCancelBtn");
     const storeModalTitle = $("storeModalTitle");
+    const storeNotifyGroup = $("storeNotifyGroup");
     // Employees tab
     const employeesTab  = $("employeesTab");
     const storeSelector = $("storeSelector");
@@ -1731,18 +1741,20 @@
     }
 
     // ── CRUD: stores ─────────────────────────────────────────────────
-    async function saveStore(name, address) {
+    async function saveStore(name, address, notifyUserIds) {
       try {
         if (editingStoreId) {
           await db.collection("stores").doc(editingStoreId).update({
             name: name.trim(),
             address: address.trim() || null,
+            notifyUserIds: notifyUserIds || [],
           });
           showToast("Το κατάστημα ενημερώθηκε");
         } else {
           await db.collection("stores").add({
             name: name.trim(),
             address: address.trim() || null,
+            notifyUserIds: notifyUserIds || [],
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             createdBy: auth.currentUser ? auth.currentUser.uid : null,
           });
@@ -2668,19 +2680,41 @@
     }
 
     // ── Modal: store ─────────────────────────────────────────────────
+    function renderStoreNotifyCheckboxes(selectedIds) {
+      // Show all non-pending users (admins, managers, cashiers) as candidate recipients
+      const candidates = users.filter((u) => u.role && u.role !== null);
+      if (!candidates.length) {
+        storeNotifyGroup.innerHTML = `<div class="hint">Δεν υπάρχουν χρήστες ακόμα. Πρόσθεσε στο tab «Χρήστες».</div>`;
+        return;
+      }
+      const labelOf = (u) => {
+        const role = u.role === "admin" ? "Admin" : u.role === "manager" ? "Υπεύθυνος" : "Ταμίας";
+        return escapeHtml((u.name || u.email || "?")) + ` <span style="color:var(--muted);font-size:0.78rem">(${role})</span>`;
+      };
+      storeNotifyGroup.innerHTML = candidates.map((u) =>
+        `<label class="check-row"><input type="checkbox" value="${u.id}" ${(selectedIds || []).includes(u.id) ? "checked" : ""}> ${labelOf(u)}</label>`
+      ).join("");
+    }
+    function getSelectedNotifyIds() {
+      return Array.from(storeNotifyGroup.querySelectorAll('input[type="checkbox"]:checked')).map((c) => c.value);
+    }
+
     function openStoreModal(storeId) {
       editingStoreId = storeId || null;
       storeForm.reset();
+      let notifyIds = [];
       if (storeId) {
         const s = stores.find((x) => x.id === storeId);
         if (s) {
           storeNameInput.value = s.name || "";
           storeAddressInput.value = s.address || "";
+          notifyIds = Array.isArray(s.notifyUserIds) ? s.notifyUserIds : [];
         }
         storeModalTitle.textContent = "Επεξεργασία Καταστήματος";
       } else {
         storeModalTitle.textContent = "Νέο Κατάστημα";
       }
+      renderStoreNotifyCheckboxes(notifyIds);
       storeModal.classList.add("open");
       setTimeout(() => storeNameInput.focus(), 100);
     }
@@ -2975,7 +3009,7 @@
       const name = storeNameInput.value.trim();
       const address = storeAddressInput.value.trim();
       if (!name) return;
-      await saveStore(name, address);
+      await saveStore(name, address, getSelectedNotifyIds());
       closeStoreModal();
     });
     storesListEl.addEventListener("click", (e) => {
