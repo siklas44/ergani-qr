@@ -1740,6 +1740,13 @@
         ? `Διαγραφή του καταστήματος «${s.name}» ΚΑΙ των ${count} εργαζομένων του;`
         : `Διαγραφή του καταστήματος «${s.name}»;`;
       if (!confirm(msg)) return;
+      // Second confirmation: type the store name to confirm
+      const typed = prompt(`Για επιβεβαίωση, πληκτρολόγησε ακριβώς το όνομα του καταστήματος:\n\n${s.name}`);
+      if (typed === null) return;
+      if ((typed || "").trim() !== (s.name || "").trim()) {
+        showToast("Το όνομα δεν ταιριάζει — η διαγραφή ακυρώθηκε");
+        return;
+      }
       try {
         // Cascade delete employees in batches of 500
         const batch = db.batch();
@@ -2804,11 +2811,6 @@
     }
     // Get the schedule cell label/state for an employee on a given day key.
     function dayLabelFor(emp, dayKey) {
-      const sched = emp && emp.schedule && emp.schedule[dayKey];
-      if (sched && sched.from && sched.to && !sched.off) {
-        return { text: compactHours(sched.from, sched.to), off: false };
-      }
-      if (sched && sched.off) return { text: "ΡΕΠ", off: true };
       const def = TICK_DAYS.find((x) => x.key === dayKey);
       return { text: def ? def.label : "", off: false };
     }
