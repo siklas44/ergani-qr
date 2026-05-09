@@ -2712,6 +2712,10 @@
         showToast("Ο εργαζόμενος δεν έχει κωδικό QR");
         return;
       }
+      if (isQrBlockedToday(employee)) {
+        showToast("Δεν επιτρέπεται QR σήμερα (✗ από admin)");
+        return;
+      }
       qrNameEl.textContent = employee.name || "";
       qrCodeText.textContent = employee.code;
       qrCodeEl.innerHTML = "";
@@ -2817,9 +2821,17 @@
 
     function canEditTicks() {
       const role = (currentUserDoc && currentUserDoc.role) || null;
-      if (role === "admin") return true;
-      const p = (currentUserDoc && currentUserDoc.permissions) || {};
-      return !!(p.tickDays || p.editEmployees || p.scanQR);
+      return role === "admin";
+    }
+
+    // Today's day key (mon/tue/.../sun)
+    function todayDayKey() {
+      return ["sun","mon","tue","wed","thu","fri","sat"][new Date().getDay()];
+    }
+    // If today's tick is "x", QR display is blocked
+    function isQrBlockedToday(emp) {
+      const ticks = getActiveWeekTicks(emp);
+      return tickStateOf(ticks[todayDayKey()]) === "x";
     }
 
     function renderTicks(emp) {
