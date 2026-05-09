@@ -2804,11 +2804,6 @@
     }
     // Get the schedule cell label/state for an employee on a given day key.
     function dayLabelFor(emp, dayKey) {
-      const sched = emp && emp.schedule && emp.schedule[dayKey];
-      if (sched && sched.from && sched.to && !sched.off) {
-        return { text: compactHours(sched.from, sched.to), off: false };
-      }
-      if (sched && sched.off) return { text: "ΡΕΠ", off: true };
       const def = TICK_DAYS.find((x) => x.key === dayKey);
       return { text: def ? def.label : "", off: false };
     }
