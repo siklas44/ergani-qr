@@ -2821,7 +2821,12 @@
 
     function canEditTicks() {
       const role = (currentUserDoc && currentUserDoc.role) || null;
-      return role === "admin";
+      if (role === "admin") return true;
+      const p = (currentUserDoc && currentUserDoc.permissions) || {};
+      return !!(p.tickDays || p.editEmployees || p.scanQR);
+    }
+    function isAdminUser() {
+      return ((currentUserDoc && currentUserDoc.role) || null) === "admin";
     }
 
     // Today's day key (mon/tue/.../sun)
@@ -2847,7 +2852,18 @@
       const emp = currentEmp || employees.find((x) => x.id === empId);
       if (!emp) return;
       const current = getActiveWeekTicks(emp);
-      const next = nextTickState(tickStateOf(current[dayKey]));
+      const curState = tickStateOf(current[dayKey]);
+      // Non-admins toggle only between "" and "tick"; admin has full tri-state including "x"
+      let next;
+      if (isAdminUser()) {
+        next = nextTickState(curState);
+      } else {
+        if (curState === "x") {
+          showToast("Μόνο ο admin μπορεί να αλλάξει το ✗");
+          return;
+        }
+        next = curState === "tick" ? "" : "tick";
+      }
       const newDays = { ...current, [dayKey]: next };
       try {
         await db.collection("stores").doc(storeId)
