@@ -2842,9 +2842,11 @@
     function renderTicks(emp) {
       const ticks = getActiveWeekTicks(emp);
       const editable = canEditTicks();
-      detTicksRow.innerHTML = TICK_DAYS.map((d) =>
-        `<button type="button" class="tick-box ${ticks[d.key] ? "checked" : ""}" data-day="${d.key}" ${editable ? "" : "disabled"}>${d.label}</button>`
-      ).join("");
+      detTicksRow.innerHTML = TICK_DAYS.map((d) => {
+        const state = tickStateOf(ticks[d.key]);
+        const cls = ["tick-box", tickClassFor(state)].filter(Boolean).join(" ");
+        return `<button type="button" class="${cls}" data-day="${d.key}" ${editable ? "" : "disabled"}>${tickLabelFor(state, d.label)}</button>`;
+      }).join("");
     }
 
     // Cycle a single day's tick state for an employee (tri-state)
