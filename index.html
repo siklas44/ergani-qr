@@ -2820,7 +2820,10 @@
     }
 
     function canEditTicks() {
-      return ((currentUserDoc && currentUserDoc.role) || null) === "admin";
+      const role = (currentUserDoc && currentUserDoc.role) || null;
+      if (role === "admin") return true;
+      const p = (currentUserDoc && currentUserDoc.permissions) || {};
+      return !!(p.tickDays || p.editEmployees || p.scanQR);
     }
     function isAdminUser() {
       return ((currentUserDoc && currentUserDoc.role) || null) === "admin";
@@ -2850,13 +2853,19 @@
     async function cycleWeekTick(storeId, empId, dayKey, currentEmp) {
       const emp = currentEmp || employees.find((x) => x.id === empId);
       if (!emp) return;
-      if (!isAdminUser()) {
-        showToast("Μόνο ο admin μπορεί να αλλάξει το ✗");
-        return;
-      }
       const current = getActiveWeekTicks(emp);
       const curState = tickStateOf(current[dayKey]);
-      const next = curState === "x" ? "" : "x";
+      // Non-admins toggle only between "" and "tick"; admin has tri-state including "x"
+      let next;
+      if (isAdminUser()) {
+        next = nextTickState(curState);
+      } else {
+        if (curState === "x") {
+          showToast("Μόνο ο admin μπορεί να αλλάξει το ✗");
+          return;
+        }
+        next = curState === "tick" ? "" : "tick";
+      }
       const newDays = { ...current, [dayKey]: next };
       try {
         await db.collection("stores").doc(storeId)
