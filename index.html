@@ -1563,7 +1563,7 @@
           const state = tickStateOf(ticks[d.key]);
           const lbl = dayLabelFor(e, d.key);
           const cls = ["tick-box", tickClassFor(state), lbl.off ? "off-day" : ""].filter(Boolean).join(" ");
-          return `<button type="button" class="${cls}" data-day="${d.key}" data-tick-emp="${e.id}" data-day-label="${escapeHtml(lbl.text)}" ${editable ? "" : "disabled"}>${escapeHtml(lbl.text)}</button>`;
+          return `<button type="button" class="${cls}" data-day="${d.key}" data-tick-emp="${e.id}" data-day-label="${escapeHtml(lbl.text)}" ${editable ? "" : "disabled"}>${escapeHtml(tickLabelFor(state, lbl.text))}</button>`;
         }).join("");
         return `
         <div class="employee" data-id="${e.id}">
@@ -2820,10 +2820,7 @@
     }
 
     function canEditTicks() {
-      const role = (currentUserDoc && currentUserDoc.role) || null;
-      if (role === "admin") return true;
-      const p = (currentUserDoc && currentUserDoc.permissions) || {};
-      return !!(p.tickDays || p.editEmployees || p.scanQR);
+      return ((currentUserDoc && currentUserDoc.role) || null) === "admin";
     }
     function isAdminUser() {
       return ((currentUserDoc && currentUserDoc.role) || null) === "admin";
@@ -2853,19 +2850,13 @@
     async function cycleWeekTick(storeId, empId, dayKey, currentEmp) {
       const emp = currentEmp || employees.find((x) => x.id === empId);
       if (!emp) return;
+      if (!isAdminUser()) {
+        showToast("Μόνο ο admin μπορεί να αλλάξει το ✗");
+        return;
+      }
       const current = getActiveWeekTicks(emp);
       const curState = tickStateOf(current[dayKey]);
-      // Non-admins toggle only between "" and "tick"; admin has full tri-state including "x"
-      let next;
-      if (isAdminUser()) {
-        next = nextTickState(curState);
-      } else {
-        if (curState === "x") {
-          showToast("Μόνο ο admin μπορεί να αλλάξει το ✗");
-          return;
-        }
-        next = curState === "tick" ? "" : "tick";
-      }
+      const next = curState === "x" ? "" : "x";
       const newDays = { ...current, [dayKey]: next };
       try {
         await db.collection("stores").doc(storeId)
