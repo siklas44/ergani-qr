@@ -1013,6 +1013,7 @@
       <button class="tab-btn" data-tab="employees">👷 Εργαζόμενοι</button>
       <button class="tab-btn" data-tab="all" id="allTabBtn" hidden>📋 Όλοι</button>
       <button class="tab-btn" data-tab="users" id="usersTabBtn" hidden>👥 Χρήστες</button>
+      <button class="tab-btn" data-tab="mgrqr" id="mgrQrTabBtn" hidden>📱 QR Υπευθύνου</button>
     </nav>
 
     <main>
@@ -1035,6 +1036,11 @@
       <section id="usersTab" hidden>
         <button class="add-btn" id="addUserBtn">+ Νέος Χρήστης</button>
         <div class="list" id="usersList"></div>
+      </section>
+
+      <!-- Manager QR tab (shown to managers/cashiers; admin can also see for self) -->
+      <section id="mgrQrTab" hidden>
+        <div class="list" id="mgrQrList"></div>
       </section>
 
       <!-- Employees tab -->
@@ -1158,6 +1164,11 @@
           <div class="check-group" id="userStoresGroup">
             <div class="hint">Πρόσθεσε πρώτα καταστήματα στο tab «Καταστήματα».</div>
           </div>
+        </div>
+        <div class="form-group" id="userMgrQrsGroup" hidden>
+          <label>QR Υπευθύνου ανά κατάστημα</label>
+          <div class="check-group" id="userMgrQrsList"></div>
+          <div class="hint">Σκάναρε το QR Εργάνης του υπευθύνου για κάθε ανατεθειμένο κατάστημα. Πρώτα αποθήκευσε τον χρήστη.</div>
         </div>
         <div class="form-group">
           <label>Δικαιώματα</label>
@@ -1364,6 +1375,11 @@
     const schedImportCancelBtn = $("schedImportCancelBtn");
     const schedImportDoBtn     = $("schedImportDoBtn");
     const usersListEl   = $("usersList");
+    const mgrQrTabBtn   = $("mgrQrTabBtn");
+    const mgrQrTab      = $("mgrQrTab");
+    const mgrQrListEl   = $("mgrQrList");
+    const userMgrQrsGroup = $("userMgrQrsGroup");
+    const userMgrQrsList  = $("userMgrQrsList");
     const addUserBtn    = $("addUserBtn");
     const userModal     = $("userModal");
     const userModalTitle= $("userModalTitle");
@@ -2125,6 +2141,7 @@
               return (a.email || "").localeCompare(b.email || "");
             });
             renderUsers();
+            if (userModal.classList.contains("open") && editingUserId) renderUserMgrQrs();
           },
           (err) => {
             console.error("users listener error:", err);
@@ -2155,6 +2172,41 @@
       permTickDays.checked = def.tickDays;
     }
 
+    function renderMgrQrTab() {
+      if (typeof qrcode === "undefined") {
+        mgrQrListEl.innerHTML = `<div class="empty"><p>Δεν φορτώθηκε η βιβλιοθήκη QR.</p></div>`;
+        return;
+      }
+      const me = auth.currentUser ? auth.currentUser.uid : null;
+      const u = users.find((x) => x.id === me) || currentUserDoc;
+      const map = (u && u.managerQRs) || {};
+      const ids = (u && u.storeIds) || [];
+      const entries = ids
+        .filter((sid) => map[sid])
+        .map((sid) => ({ sid, name: (stores.find((s) => s.id === sid) || {}).name || sid, code: map[sid] }));
+      if (entries.length === 0) {
+        mgrQrListEl.innerHTML = `<div class="empty"><p>Δεν υπάρχουν QR υπευθύνου ακόμη.</p></div>`;
+        return;
+      }
+      mgrQrListEl.innerHTML = entries.map((e) => {
+        let imgTag = "";
+        try {
+          const qr = qrcode(0, "L");
+          qr.addData(e.code);
+          qr.make();
+          const mc = qr.getModuleCount();
+          const cell = Math.max(3, Math.floor(280 / (mc + 8)));
+          imgTag = qr.createImgTag(cell, 4 * cell);
+        } catch (err) {
+          imgTag = `<div style="color:#991b1b;">Σφάλμα QR</div>`;
+        }
+        return `<div class="user-card" style="flex-direction:column;align-items:center;padding:16px;">
+          <h3 style="margin:0 0 12px 0;color:var(--primary);">QR ${escapeHtml(e.name)}</h3>
+          <div style="background:#fff;padding:8px;border-radius:8px;">${imgTag}</div>
+        </div>`;
+      }).join("");
+    }
+
     function getSelectedRole() {
       const sel = roleGroup.querySelector(".radio-pill.selected");
       return sel ? sel.dataset.role : null;
@@ -2176,6 +2228,33 @@
     function getSelectedStoreIds() {
       return Array.from(userStoresGroup.querySelectorAll('input[type="checkbox"]:checked'))
         .map((cb) => cb.value);
+    }
+
+    // Render manager-QR scan rows for the user being edited
+    function renderUserMgrQrs() {
+      if (!editingUserId) {
+        userMgrQrsGroup.hidden = true;
+        return;
+      }
+      const u = users.find((x) => x.id === editingUserId);
+      const map = (u && u.managerQRs) || {};
+      const ids = getSelectedStoreIds();
+      if (ids.length === 0) {
+        userMgrQrsGroup.hidden = true;
+        return;
+      }
+      userMgrQrsGroup.hidden = false;
+      userMgrQrsList.innerHTML = ids.map((sid) => {
+        const s = stores.find((x) => x.id === sid);
+        const has = !!map[sid];
+        return `<div class="check-row" style="display:flex;align-items:center;gap:8px;justify-content:space-between;">
+          <span>${has ? "✅" : "—"} ${escapeHtml(s ? s.name : sid)}</span>
+          <span style="display:flex;gap:6px;">
+            <button type="button" class="btn btn-secondary" data-mgrqr-scan="${sid}">📷 ${has ? "Αλλαγή" : "Σκάναρε"}</button>
+            ${has ? `<button type="button" class="btn btn-secondary" style="color:#991b1b;" data-mgrqr-clear="${sid}">🗑️</button>` : ""}
+          </span>
+        </div>`;
+      }).join("");
     }
 
     function generatePassword() {
@@ -2221,6 +2300,7 @@
         setRolePill("cashier");
         renderStoreCheckboxes([]);
       }
+      renderUserMgrQrs();
       userModal.classList.add("open");
       setTimeout(() => userEmailInput.focus(), 100);
     }
@@ -2367,6 +2447,10 @@
       const employeesTabBtn = document.querySelector('.tab-btn[data-tab="employees"]');
       if (storesTabBtn) storesTabBtn.hidden = !isAdminRole;
       usersTabBtn.hidden = !isAdminRole;
+      // Manager-QR tab: visible if user has at least one stored manager QR
+      const myDoc = currentUserDoc || {};
+      const myMgrQRs = myDoc.managerQRs || {};
+      mgrQrTabBtn.hidden = Object.keys(myMgrQRs).length === 0;
       // Employees tab is always visible for any role with at least 1 store
 
       // Buttons inside employees tab
@@ -2491,6 +2575,8 @@
     // ── Camera QR scanner (jsQR + getUserMedia) ──────────────────────
     let scanStream = null;
     let scanRafId  = null;
+    let scanMode    = "employee"; // "employee" | "managerQR"
+    let scanContext = null;       // { uid, storeId } when scanMode === "managerQR"
     const scanVideo  = $("scanVideo");
     const scanCanvas = $("scanCanvas");
     const recentScans = new Map(); // code → expiry timestamp
@@ -2528,6 +2614,23 @@
       for (const [k, exp] of recentScans) if (exp < now) recentScans.delete(k);
       if (recentScans.has(text)) return;
       recentScans.set(text, now + 3000);
+
+      // Manager-QR scan: save to user doc and close
+      if (scanMode === "managerQR" && scanContext) {
+        const { uid, storeId } = scanContext;
+        try {
+          await db.collection("users").doc(uid).update({
+            ["managerQRs." + storeId]: text,
+          });
+          scanLogPush("added", "✅ Αποθηκεύτηκε QR υπευθύνου");
+          showToast("Αποθηκεύτηκε");
+        } catch (err) {
+          console.error("manager QR save failed:", err);
+          scanLogPush("error", "❌ Σφάλμα αποθήκευσης");
+        }
+        closeScanModal();
+        return;
+      }
 
       const erg = parseErganiQR(text);
       let name;
@@ -2590,7 +2693,7 @@
     }
 
     async function openScanModal() {
-      if (!currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
+      if (scanMode !== "managerQR" && !currentStoreId) { showToast("Διάλεξε πρώτα κατάστημα"); return; }
       scanLogEl.innerHTML = "";
       recentScans.clear();
       scanModal.classList.add("open");
@@ -2649,6 +2752,8 @@
       scanVideo.srcObject = null;
       barcodeDetector = null;
       scanModal.classList.remove("open");
+      scanMode = "employee";
+      scanContext = null;
     }
 
     // ── Modal: store ─────────────────────────────────────────────────
@@ -2917,6 +3022,8 @@
       employeesTab.hidden = (name !== "employees");
       allTab.hidden       = (name !== "all");
       usersTab.hidden     = (name !== "users");
+      mgrQrTab.hidden     = (name !== "mgrqr");
+      if (name === "mgrqr") renderMgrQrTab();
     }
     tabBtns.forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
     allSearchEl.addEventListener("input", renderAllEmployees);
@@ -2949,6 +3056,36 @@
       if (delBtn) { e.stopPropagation(); deleteUser(delBtn.dataset.delUser); return; }
       const editBtn = e.target.closest("[data-edit-user]");
       if (editBtn) { e.stopPropagation(); openUserModal(editBtn.dataset.editUser); return; }
+    });
+
+    // Re-render manager-QR rows when store checkboxes change
+    userStoresGroup.addEventListener("change", renderUserMgrQrs);
+
+    // Manager QR scan/clear inside user modal
+    userMgrQrsList.addEventListener("click", async (e) => {
+      const scanBtn = e.target.closest("[data-mgrqr-scan]");
+      if (scanBtn) {
+        e.preventDefault();
+        if (!editingUserId) { showToast("Αποθήκευσε πρώτα τον χρήστη"); return; }
+        scanMode = "managerQR";
+        scanContext = { uid: editingUserId, storeId: scanBtn.dataset.mgrqrScan };
+        openScanModal();
+        return;
+      }
+      const clrBtn = e.target.closest("[data-mgrqr-clear]");
+      if (clrBtn) {
+        e.preventDefault();
+        if (!editingUserId) return;
+        const sid = clrBtn.dataset.mgrqrClear;
+        try {
+          await db.collection("users").doc(editingUserId).update({
+            ["managerQRs." + sid]: firebase.firestore.FieldValue.delete(),
+          });
+          showToast("Διαγράφηκε");
+        } catch (err) {
+          console.error(err); showToast("Σφάλμα");
+        }
+      }
     });
     userForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -3197,6 +3334,7 @@
         userEmailEl.textContent = "";
         usersTabBtn.hidden = true;
         allTabBtn.hidden = true;
+        mgrQrTabBtn.hidden = true;
         currentUserDoc = null;
         setAuthMode("login");
         showOnly(loginView);
