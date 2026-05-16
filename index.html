@@ -1550,9 +1550,10 @@
     // ── Render: employees list (current store) ───────────────────────
     function renderEmployees() {
       const q = searchEl.value.trim().toLowerCase();
-      const filtered = q
+      const filtered = (q
         ? employees.filter((e) => (e.name || "").toLowerCase().includes(q) || (e.code || "").toLowerCase().includes(q))
-        : employees;
+        : employees.slice()
+      ).sort((a, b) => (a.name || "").localeCompare(b.name || "", "el"));
 
       if (!currentStoreId) {
         listEl.innerHTML = `
