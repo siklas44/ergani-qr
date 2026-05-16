@@ -1550,10 +1550,19 @@
     // ── Render: employees list (current store) ───────────────────────
     function renderEmployees() {
       const q = searchEl.value.trim().toLowerCase();
+      const todayKey = todayDayKey();
+      const tickedToday = (e) => {
+        const t = getActiveWeekTicks(e);
+        return tickStateOf(t[todayKey]) === "tick" ? 1 : 0;
+      };
       const filtered = (q
         ? employees.filter((e) => (e.name || "").toLowerCase().includes(q) || (e.code || "").toLowerCase().includes(q))
         : employees.slice()
-      ).sort((a, b) => (a.name || "").localeCompare(b.name || "", "el"));
+      ).sort((a, b) => {
+        const d = tickedToday(b) - tickedToday(a);
+        if (d) return d;
+        return (a.name || "").localeCompare(b.name || "", "el");
+      });
 
       if (!currentStoreId) {
         listEl.innerHTML = `
