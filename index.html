@@ -1557,14 +1557,28 @@
         const t = getActiveWeekTicks(e);
         return tickStateOf(t[todayKey]) === "tick" ? 1 : 0;
       };
-      const filtered = (q
-        ? employees.filter((e) => (e.name || "").toLowerCase().includes(q) || (e.code || "").toLowerCase().includes(q))
-        : employees.slice()
-      ).sort((a, b) => {
+      const sortFn = (a, b) => {
         const d = tickedToday(b) - tickedToday(a);
         if (d) return d;
         return (a.name || "").localeCompare(b.name || "", "el");
-      });
+      };
+      // Freeze order per store: don't reshuffle on tick-toggle until user navigates
+      if (!window._frozenEmpOrder || window._frozenEmpOrder.storeId !== currentStoreId) {
+        const fullSorted = employees.slice().sort(sortFn);
+        window._frozenEmpOrder = { storeId: currentStoreId, ids: fullSorted.map((e) => e.id) };
+      }
+      const byId = new Map(employees.map((e) => [e.id, e]));
+      const ordered = [];
+      const seen = new Set();
+      for (const id of window._frozenEmpOrder.ids) {
+        if (byId.has(id)) { ordered.push(byId.get(id)); seen.add(id); }
+      }
+      // Brand-new employees: append (will float on next refresh)
+      employees.forEach((e) => { if (!seen.has(e.id)) ordered.push(e); });
+      window._frozenEmpOrder.ids = ordered.map((e) => e.id);
+      const filtered = q
+        ? ordered.filter((e) => (e.name || "").toLowerCase().includes(q) || (e.code || "").toLowerCase().includes(q))
+        : ordered;
 
       if (!currentStoreId) {
         listEl.innerHTML = `
@@ -3036,6 +3050,11 @@
       usersTab.hidden     = (name !== "users");
       mgrQrTab.hidden     = (name !== "mgrqr");
       if (name === "mgrqr") renderMgrQrTab();
+      if (name === "employees") {
+        // Re-freeze order when entering employees tab (so tick-floats settle on next visit)
+        window._frozenEmpOrder = null;
+        renderEmployees();
+      }
     }
     tabBtns.forEach((b) => b.addEventListener("click", () => switchTab(b.dataset.tab)));
     allSearchEl.addEventListener("input", renderAllEmployees);
