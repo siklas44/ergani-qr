@@ -1592,8 +1592,15 @@
         return (a.name || "").localeCompare(b.name || "", "el");
       };
       const activeEmployees = employees.filter((e) => e.archived !== true);
-      // Freeze order per store: don't reshuffle on tick-toggle until user navigates
-      if (!window._frozenEmpOrder || window._frozenEmpOrder.storeId !== currentStoreId) {
+      // Freeze order per store: don't reshuffle on tick-toggle until user navigates.
+      // Re-sort fresh when: no cache, different store, OR cache was frozen on an
+      // empty list before Firestore data arrived (race fix).
+      const cache = window._frozenEmpOrder;
+      const needsFreshSort =
+        !cache ||
+        cache.storeId !== currentStoreId ||
+        (cache.ids.length === 0 && activeEmployees.length > 0);
+      if (needsFreshSort) {
         const fullSorted = activeEmployees.slice().sort(sortFn);
         window._frozenEmpOrder = { storeId: currentStoreId, ids: fullSorted.map((e) => e.id) };
       }
