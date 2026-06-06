@@ -1056,6 +1056,7 @@
         <button class="add-btn" id="scanBtn" disabled>📷 Σάρωση QR εργαζόμενου</button>
         <button class="secondary-btn" id="addBtn" disabled hidden>+ Προσθήκη Εργαζόμενου</button>
         <button class="secondary-btn" id="importBtn" disabled hidden>📥 Μαζική εισαγωγή από Excel/CSV</button>
+        <button class="secondary-btn" id="archiveToggleBtn" hidden>📦 Αρχείο</button>
         <div class="list" id="list"></div>
       </section>
     </main>
@@ -1351,6 +1352,8 @@
     const detEditBtn    = $("detEditBtn");
     const detDeleteBtn  = $("detDeleteBtn");
     const importBtn       = $("importBtn");
+    const archiveToggleBtn = $("archiveToggleBtn");
+    let showArchive = false;
     const importModal     = $("importModal");
     const importText      = $("importText");
     const importFile      = $("importFile");
@@ -1549,8 +1552,34 @@
         </div>`).join("");
     }
 
+    // ── Render: archived employees list (current store) ─────────────
+    function renderArchivedEmployees() {
+      const archived = employees.filter((e) => e.archived === true)
+        .sort((a, b) => (a.name || "").localeCompare(b.name || "", "el"));
+      if (!currentStoreId) {
+        listEl.innerHTML = `<div class="empty"><p>Διάλεξε κατάστημα.</p></div>`;
+        return;
+      }
+      if (archived.length === 0) {
+        listEl.innerHTML = `<div class="empty"><p>Το αρχείο είναι άδειο.</p></div>`;
+        return;
+      }
+      listEl.innerHTML = archived.map((e) => `
+        <div class="employee" data-id="${e.id}">
+          <div class="employee-row">
+            <div class="avatar">${escapeHtml(initials(e.name || "?"))}</div>
+            <div class="employee-info">
+              <div class="employee-name">${escapeHtml(e.name || "(χωρίς όνομα)")}</div>
+              <div class="employee-code">${escapeHtml(e.code || "")}</div>
+            </div>
+            <button class="icon-btn" data-restore-emp="${e.id}" aria-label="Επαναφορά" title="Επαναφορά">↩️ Επαναφορά</button>
+          </div>
+        </div>`).join("");
+    }
+
     // ── Render: employees list (current store) ───────────────────────
     function renderEmployees() {
+      if (showArchive) { renderArchivedEmployees(); return; }
       const q = searchEl.value.trim().toLowerCase();
       const todayKey = todayDayKey();
       const tickedToday = (e) => {
@@ -1562,19 +1591,20 @@
         if (d) return d;
         return (a.name || "").localeCompare(b.name || "", "el");
       };
+      const activeEmployees = employees.filter((e) => e.archived !== true);
       // Freeze order per store: don't reshuffle on tick-toggle until user navigates
       if (!window._frozenEmpOrder || window._frozenEmpOrder.storeId !== currentStoreId) {
-        const fullSorted = employees.slice().sort(sortFn);
+        const fullSorted = activeEmployees.slice().sort(sortFn);
         window._frozenEmpOrder = { storeId: currentStoreId, ids: fullSorted.map((e) => e.id) };
       }
-      const byId = new Map(employees.map((e) => [e.id, e]));
+      const byId = new Map(activeEmployees.map((e) => [e.id, e]));
       const ordered = [];
       const seen = new Set();
       for (const id of window._frozenEmpOrder.ids) {
         if (byId.has(id)) { ordered.push(byId.get(id)); seen.add(id); }
       }
       // Brand-new employees: append (will float on next refresh)
-      employees.forEach((e) => { if (!seen.has(e.id)) ordered.push(e); });
+      activeEmployees.forEach((e) => { if (!seen.has(e.id)) ordered.push(e); });
       window._frozenEmpOrder.ids = ordered.map((e) => e.id);
       const filtered = q
         ? ordered.filter((e) => (e.name || "").toLowerCase().includes(q) || (e.code || "").toLowerCase().includes(q))
@@ -1719,6 +1749,15 @@
       if (searchBox) searchBox.hidden = noStore;
       scanBtn.disabled = noStore;
       scanBtn.style.display = noStore ? "none" : "";
+      // Archive toggle: visible when store selected AND user can delete employees
+      const role = (currentUserDoc && currentUserDoc.role) || null;
+      const perms = (currentUserDoc && currentUserDoc.permissions) || {};
+      const canDel = role === "admin" || !!perms.deleteEmployees;
+      archiveToggleBtn.hidden = noStore || !canDel;
+      if (noStore) {
+        showArchive = false;
+        archiveToggleBtn.textContent = "📦 Αρχείο";
+      }
       if (noStore) searchEl.value = "";
       if (!currentStoreId) {
         renderEmployees();
@@ -1837,11 +1876,29 @@
       if (!confirm(`Διαγραφή του εργαζόμενου «${emp.name}»;`)) return;
       try {
         await db.collection("stores").doc(currentStoreId)
-          .collection("employees").doc(id).delete();
-        showToast("Ο εργαζόμενος διαγράφηκε");
+          .collection("employees").doc(id).update({
+            archived: true,
+            archivedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        showToast("Μεταφέρθηκε στο Αρχείο");
       } catch (err) {
         console.error("deleteEmployee failed:", err);
         showToast("Σφάλμα κατά τη διαγραφή");
+      }
+    }
+
+    async function restoreEmployee(id) {
+      if (!currentStoreId) return;
+      try {
+        await db.collection("stores").doc(currentStoreId)
+          .collection("employees").doc(id).update({
+            archived: false,
+            archivedAt: firebase.firestore.FieldValue.delete(),
+          });
+        showToast("Επαναφέρθηκε");
+      } catch (err) {
+        console.error("restoreEmployee failed:", err);
+        showToast("Σφάλμα κατά την επαναφορά");
       }
     }
 
@@ -2666,8 +2723,19 @@
         name = "(άγνωστο)";
       }
 
-      if (employees.find((e) => e.code === text)) {
-        scanLogPush("skip", `⏭️  ${name} — υπάρχει ήδη`);
+      const existing = employees.find((e) => e.code === text);
+      if (existing) {
+        if (existing.archived === true) {
+          scanLogPush("skip", `⏭️  ${existing.name || name} — υπάρχει στο Αρχείο`);
+          // Defer the confirm so it doesn't block the scanner loop
+          setTimeout(() => {
+            if (confirm(`Ο εργαζόμενος «${existing.name || name}» υπάρχει στο Αρχείο. Να γίνει επαναφορά;`)) {
+              restoreEmployee(existing.id);
+            }
+          }, 50);
+        } else {
+          scanLogPush("skip", `⏭️  ${existing.name || name} — υπάρχει ήδη`);
+        }
         return;
       }
       try {
@@ -2675,6 +2743,7 @@
           .collection("employees").add({
             name,
             code: text,
+            archived: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             createdBy: auth.currentUser ? auth.currentUser.uid : null,
           });
@@ -3184,6 +3253,15 @@
     });
 
     storeSelector.addEventListener("change", (e) => setCurrentStore(e.target.value));
+
+    archiveToggleBtn.addEventListener("click", () => {
+      showArchive = !showArchive;
+      archiveToggleBtn.textContent = showArchive ? "👷 Ενεργοί" : "📦 Αρχείο";
+      // Hide search/scan/add while in archive view
+      searchEl.parentElement.style.display = showArchive ? "none" : "";
+      scanBtn.style.display = showArchive ? "none" : (currentStoreId ? "" : "none");
+      renderEmployees();
+    });
     searchEl.addEventListener("input", renderEmployees);
 
     // Scanner wiring
@@ -3209,6 +3287,8 @@
       // Tick buttons: handled by direct listeners attached after each render
       // (Android Chrome was unreliable with event delegation here)
       if (e.target.closest("[data-tick-emp]")) return;
+      const restoreBtn = e.target.closest("[data-restore-emp]");
+      if (restoreBtn) { e.stopPropagation(); restoreEmployee(restoreBtn.dataset.restoreEmp); return; }
       const delBtn = e.target.closest("[data-del-emp]");
       if (delBtn) { e.stopPropagation(); deleteEmployee(delBtn.dataset.delEmp); return; }
       const editBtn = e.target.closest("[data-edit-emp]");
