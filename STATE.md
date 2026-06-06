@@ -3,6 +3,12 @@
 > Τελευταία ενημέρωση: 2026-06-06
 
 ## 🆕 Πρόσφατο (2026-06-06)
+- Fix race στο sorting εργαζομένων: αν το frozen-order cache είχε
+  παγώσει με κενή λίστα πριν φτάσει το Firestore snapshot, τώρα γίνεται
+  πλήρης αλφαβητική + ticked-today ταξινόμηση μόλις έρθουν τα δεδομένα.
+  Διορθώνει hard refresh, αλλαγή store, initial auto-select.
+
+
 - Soft-delete εργαζομένων (αρχείο) με `archived: true` + `archivedAt`
   αντί για διαγραφή του document.
 - Νέο per-store toggle «📦 Αρχείο» στο tab Εργαζόμενοι — λίστα
