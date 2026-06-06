@@ -1,6 +1,17 @@
 # STATE — Πού είμαστε
 
-> Τελευταία ενημέρωση: 2026-05-07
+> Τελευταία ενημέρωση: 2026-06-06
+
+## 🆕 Πρόσφατο (2026-06-06)
+- Soft-delete εργαζομένων (αρχείο) με `archived: true` + `archivedAt`
+  αντί για διαγραφή του document.
+- Νέο per-store toggle «📦 Αρχείο» στο tab Εργαζόμενοι — λίστα
+  αρχειοθετημένων με «↩️ Επαναφορά».
+- Duplicate-prevention στο σκανάρισμα: αν υπάρχει ενεργός με ίδιο `code`
+  → skip. Αν υπάρχει στο αρχείο → confirm για επαναφορά.
+- `firestore.rules` ενημερώθηκαν: chairs με `deleteEmployees` permission
+  μπορούν να κάνουν archive/restore (μόνο πεδία `archived`/`archivedAt`).
+  **User action**: republish rules στο Firebase Console.
 
 ## ✅ Έτοιμα
 

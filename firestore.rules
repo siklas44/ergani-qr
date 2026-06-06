@@ -80,10 +80,13 @@ service cloud.firestore {
         //  - admin
         //  - or assigned + editEmployees (full edit)
         //  - or assigned + tickDays AND only weekTicks field is being changed
+        //  - or assigned + deleteEmployees AND only archive fields are being changed (soft delete / restore)
         allow update: if isAdmin()
           || (hasStore(storeId) && hasPermission('editEmployees'))
           || (hasStore(storeId) && hasPermission('tickDays')
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weekTicks']));
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['weekTicks']))
+          || (hasStore(storeId) && hasPermission('deleteEmployees')
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['archived', 'archivedAt']));
 
         // Delete: admin OR (assigned + deleteEmployees)
         allow delete: if isAdmin() ||
