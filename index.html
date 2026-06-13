@@ -2733,13 +2733,7 @@
       const existing = employees.find((e) => e.code === text);
       if (existing) {
         if (existing.archived === true) {
-          scanLogPush("skip", `⏭️  ${existing.name || name} — υπάρχει στο Αρχείο`);
-          // Defer the confirm so it doesn't block the scanner loop
-          setTimeout(() => {
-            if (confirm(`Ο εργαζόμενος «${existing.name || name}» υπάρχει στο Αρχείο. Να γίνει επαναφορά;`)) {
-              restoreEmployee(existing.id);
-            }
-          }, 50);
+          scanLogPush("skip", `⏭️ ${existing.name || name} — υπάρχει στο Αρχείο (επαναφορά χειροκίνητα από το tab 📦 Αρχείο)`);
         } else {
           scanLogPush("skip", `⏭️  ${existing.name || name} — υπάρχει ήδη`);
         }
