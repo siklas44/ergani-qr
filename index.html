@@ -2717,19 +2717,31 @@
       return "c_" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
 
+    // Single AudioContext reused across all beeps — creating one per scan
+    // leaks audio nodes and can freeze the camera on iOS Safari / slow devices.
+    let _beepCtx = null;
+    function beep() {
+      try {
+        if (!_beepCtx) {
+          const Ctor = window.AudioContext || window.webkitAudioContext;
+          if (!Ctor) return;
+          _beepCtx = new Ctor();
+        }
+        if (_beepCtx.state === "suspended") _beepCtx.resume();
+        const o = _beepCtx.createOscillator();
+        o.frequency.value = 880;
+        o.connect(_beepCtx.destination);
+        o.start();
+        o.stop(_beepCtx.currentTime + 0.08);
+      } catch (e) {}
+    }
+
     function scanLogPush(cls, msg) {
       const li = document.createElement("li");
       li.className = cls;
       li.textContent = msg;
       scanLogEl.insertBefore(li, scanLogEl.firstChild);
-      // Beep on success
-      if (cls === "added") try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const o = ctx.createOscillator();
-        o.frequency.value = 880;
-        o.connect(ctx.destination);
-        o.start(); o.stop(ctx.currentTime + 0.08);
-      } catch (e) {}
+      if (cls === "added") beep();
     }
 
     async function onScanDecoded(text) {
@@ -2795,6 +2807,8 @@
       } catch (err) {
         console.error("scan add failed:", err);
         scanLogPush("error", `❌  ${name} — σφάλμα`);
+        // Allow immediate retry of this code: don't keep it locked for 3s
+        recentScans.delete(text);
       }
     }
 
@@ -3311,7 +3325,9 @@
     // Scanner wiring
     scanBtn.addEventListener("click", openScanModal);
     scanCloseBtn.addEventListener("click", closeScanModal);
-    scanModal.addEventListener("click", (e) => { if (e.target === scanModal) closeScanModal(); });
+    // No backdrop-close for scanModal: a stray tap outside the video must not
+    // interrupt a multi-employee scanning session. Use the Κλείσιμο button
+    // or Escape key to close intentionally.
 
     // Bulk import wiring
     importBtn.addEventListener("click", openImportModal);

@@ -3,6 +3,8 @@
 > Τελευταία ενημέρωση: 2026-06-06
 
 ## 🆕 Πρόσφατο (2026-06-13)
+- Robustness scanner: αφαίρεση backdrop-close (μόνο για scan modal),
+  reuse single AudioContext για beep, retry-after-error στο debounce.
 - Database-level uniqueness για εργαζομένους: deterministic doc IDs
   `c_<sha256-base64url(code)>` + Firestore transaction abort-if-exists σε
   scan / manual / bulk-import. Παλιά auto-ID docs δεν αλλάζουν.
