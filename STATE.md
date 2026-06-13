@@ -3,6 +3,9 @@
 > Τελευταία ενημέρωση: 2026-06-06
 
 ## 🆕 Πρόσφατο (2026-06-13)
+- Database-level uniqueness για εργαζομένους: deterministic doc IDs
+  `c_<sha256-base64url(code)>` + Firestore transaction abort-if-exists σε
+  scan / manual / bulk-import. Παλιά auto-ID docs δεν αλλάζουν.
 - Αφαιρέθηκε το auto-confirm επαναφοράς όταν σκανάρεις QR αρχειοθετημένου
   εργαζομένου — μόνο skip log, χειροκίνητη επαναφορά από το tab 📦 Αρχείο.
 

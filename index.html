@@ -1862,13 +1862,31 @@
           });
           showToast("Ο εργαζόμενος ενημερώθηκε");
         } else {
-          await empCol.add({
-            name: name.trim(),
-            code: code.trim(),
-            schedule: schedule || null,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            createdBy: auth.currentUser ? auth.currentUser.uid : null,
+          const codeTrim = code.trim();
+          // Catch duplicates against legacy auto-ID docs and freshly added ones
+          if (employees.find((e) => e.code === codeTrim)) {
+            alert("Υπάρχει ήδη εργαζόμενος με αυτόν τον κωδικό.");
+            return;
+          }
+          const ref = empCol.doc(await idFromCode(codeTrim));
+          let created = false;
+          await db.runTransaction(async (tx) => {
+            const snap = await tx.get(ref);
+            if (snap.exists) return;
+            tx.set(ref, {
+              name: name.trim(),
+              code: codeTrim,
+              schedule: schedule || null,
+              archived: false,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              createdBy: auth.currentUser ? auth.currentUser.uid : null,
+            });
+            created = true;
           });
+          if (!created) {
+            alert("Υπάρχει ήδη εργαζόμενος με αυτόν τον κωδικό.");
+            return;
+          }
           showToast("Ο εργαζόμενος προστέθηκε");
         }
       } catch (err) {
@@ -2636,9 +2654,14 @@
         for (let i = 0; i < newRows.length; i += 400) {
           const chunk = newRows.slice(i, i + 400);
           const batch = db.batch();
-          chunk.forEach((r) => {
-            const ref = empCol.doc();
-            batch.set(ref, { name: r.name, code: r.code, createdAt: ts, createdBy: uid });
+          // Deterministic ids prevent dup docs across paths (scan/manual/import).
+          // Pre-check existence so we never overwrite an existing employee.
+          const ids = await Promise.all(chunk.map((r) => idFromCode(r.code)));
+          const refs = ids.map((id) => empCol.doc(id));
+          const snaps = await Promise.all(refs.map((r) => r.get()));
+          chunk.forEach((r, j) => {
+            if (snaps[j].exists) return;
+            batch.set(refs[j], { name: r.name, code: r.code, archived: false, createdAt: ts, createdBy: uid });
           });
           await batch.commit();
         }
@@ -2680,6 +2703,18 @@
         out[part.slice(0, idx)] = part.slice(idx + 1);
       });
       return out;
+    }
+
+    // Deterministic, URL-safe Firestore doc id derived from an employee `code`.
+    // SHA-256 + base64url + "c_" prefix. Used so two writes of the same code
+    // collapse to one document (uniqueness at the database level).
+    async function idFromCode(code) {
+      const buf = new TextEncoder().encode(String(code || ""));
+      const hash = await crypto.subtle.digest("SHA-256", buf);
+      const bytes = new Uint8Array(hash);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return "c_" + btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
 
     function scanLogPush(cls, msg) {
@@ -2740,15 +2775,23 @@
         return;
       }
       try {
-        await db.collection("stores").doc(currentStoreId)
-          .collection("employees").add({
+        const empCol = db.collection("stores").doc(currentStoreId).collection("employees");
+        const ref = empCol.doc(await idFromCode(text));
+        let created = false;
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(ref);
+          if (snap.exists) return; // already created (possibly by another device/tab)
+          tx.set(ref, {
             name,
             code: text,
             archived: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             createdBy: auth.currentUser ? auth.currentUser.uid : null,
           });
-        scanLogPush("added", `✅  ${name}`);
+          created = true;
+        });
+        if (created) scanLogPush("added", `✅  ${name}`);
+        else         scanLogPush("skip",  `⏭️  ${name} — υπάρχει ήδη`);
       } catch (err) {
         console.error("scan add failed:", err);
         scanLogPush("error", `❌  ${name} — σφάλμα`);
