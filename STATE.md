@@ -1,6 +1,21 @@
 # STATE — Πού είμαστε
 
-> Τελευταία ενημέρωση: 2026-06-06
+> Τελευταία ενημέρωση: 2026-06-13
+
+## 🆕 Πρόσφατο (2026-06-13) — consolidated PR
+- Στο scan, ένας archived employee πλέον δίνει μόνο skip log («υπάρχει στο
+  Αρχείο, επαναφορά χειροκίνητα») — αφαιρέθηκε το auto-restore confirm.
+- Database-level uniqueness για εργαζομένους: deterministic doc IDs
+  `c_<sha256-base64url(code)>` + Firestore transaction abort-if-exists σε
+  scan / manual add / bulk import. Παλιά auto-ID docs δεν αλλάζουν.
+- Robust server-side guard: query `where("code","==", text)` (συμπεριλαμβάνει
+  archived) ΠΡΙΝ το transaction — πιάνει legacy auto-ID docs και race με τον
+  in-memory snapshot. Καμία διπλή εγγραφή.
+- Scanner robustness: αφαίρεση backdrop-close (μόνο για scan modal), reuse
+  single AudioContext για beep, retry-after-error στο debounce.
+- Αντικαθιστά τα ανοιχτά PR #15/#16/#17.
+
+
 
 ## 🆕 Πρόσφατο (2026-06-06)
 - Fix race στο sorting εργαζομένων: αν το frozen-order cache είχε
