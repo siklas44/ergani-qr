@@ -412,6 +412,48 @@
     }
     .auth-info.show { display: block; }
 
+    /* Credentials shown once, right after a user is created */
+    .pwd-field {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 1.1rem !important;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    .pwd-actions { display: flex; gap: 8px; margin-top: 8px; }
+    .pwd-actions .gen-pwd-btn { flex: 1; margin-top: 0; }
+    .cred-row .gen-pwd-btn { margin-top: 0; }
+    .cred-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .cred-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .cred-row + .cred-row {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .cred-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      min-width: 62px;
+    }
+    .cred-value {
+      flex: 1;
+      min-width: 120px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 1rem;
+      font-weight: 600;
+      word-break: break-all;
+      user-select: all;
+    }
+
     /* User badge in header */
     .user-badge {
       display: flex;
@@ -1036,6 +1078,7 @@
 
       <!-- Users tab -->
       <section id="usersTab" hidden>
+        <div class="auth-info" id="usersNotice"></div>
         <button class="add-btn" id="addUserBtn">+ Νέος Χρήστης</button>
         <div class="list" id="usersList"></div>
       </section>
@@ -1146,9 +1189,23 @@
         </div>
         <div class="form-group" id="userPasswordGroup">
           <label for="userPasswordInput">Αρχικός κωδικός *</label>
-          <input type="text" id="userPasswordInput" required minlength="6" autocomplete="new-password" />
-          <button type="button" class="gen-pwd-btn" id="genPwdBtn">🎲 Auto-generate</button>
-          <div class="hint" style="margin-top:6px;">Δώσε τον κωδικό στον χρήστη — μπορεί να τον αλλάξει.</div>
+          <input type="text" id="userPasswordInput" class="pwd-field" required minlength="6" autocomplete="new-password" />
+          <div class="pwd-actions">
+            <button type="button" class="gen-pwd-btn" id="genPwdBtn">🎲 Νέος κωδικός</button>
+            <button type="button" class="gen-pwd-btn" id="copyPwdBtn">📋 Αντιγραφή</button>
+          </div>
+          <div class="hint" style="margin-top:6px;">
+            ⚠️ Κράτα αυτόν τον κωδικό — <strong>δεν εμφανίζεται ξανά</strong> μετά την αποθήκευση.
+            Δώσ' τον στον χρήστη για να συνδεθεί.
+          </div>
+        </div>
+        <div class="form-group" id="userResetPwdGroup" hidden>
+          <label>Κωδικός σύνδεσης</label>
+          <button type="button" class="btn btn-secondary" id="sendResetBtn" style="width:100%;">📧 Αποστολή e-mail ορισμού κωδικού</button>
+          <div class="hint" style="margin-top:6px;">
+            Ο κωδικός δεν αλλάζει από εδώ. Είτε στέλνεις e-mail ορισμού κωδικού,
+            είτε τον αλλάζεις από Firebase Console → Authentication → Users.
+          </div>
         </div>
         <div class="form-group">
           <label for="userNameInput">Όνομα (προαιρετικό)</label>
@@ -1185,12 +1242,37 @@
             <label class="check-row"><input type="checkbox" id="permDelete"> 🗑️ Διαγράφει εργαζόμενους</label>
           </div>
         </div>
+        <div class="auth-info" id="userInfo" style="margin-top:8px;"></div>
         <div class="auth-error" id="userError" style="margin-top:8px;"></div>
         <div class="modal-actions">
           <button type="button" class="btn btn-secondary" id="userCancelBtn">Άκυρο</button>
           <button type="submit" class="btn btn-primary" id="userSaveBtn">Αποθήκευση</button>
         </div>
       </form>
+
+      <!-- Shown after a successful create: the ONLY time the password is visible -->
+      <div id="userCreatedPanel" hidden>
+        <h2 style="margin-bottom:12px;">✅ Ο χρήστης δημιουργήθηκε</h2>
+        <div class="cred-box">
+          <div class="cred-row">
+            <span class="cred-label">Email</span>
+            <span class="cred-value" id="createdEmail"></span>
+            <button type="button" class="gen-pwd-btn" id="copyCreatedEmailBtn">📋 Αντιγραφή</button>
+          </div>
+          <div class="cred-row">
+            <span class="cred-label">Κωδικός</span>
+            <span class="cred-value" id="createdPassword"></span>
+            <button type="button" class="gen-pwd-btn" id="copyCreatedPwdBtn">📋 Αντιγραφή</button>
+          </div>
+        </div>
+        <div class="auth-error show" style="margin-top:12px;">
+          ⚠️ <strong>Αντίγραψέ τα τώρα — ο κωδικός δεν εμφανίζεται ξανά.</strong><br>
+          Στείλ' τα στον χρήστη για να μπορέσει να συνδεθεί.
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-primary" id="createdDoneBtn" style="flex:1;">Τα αντέγραψα — Κλείσιμο</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1380,6 +1462,17 @@
     const schedImportCancelBtn = $("schedImportCancelBtn");
     const schedImportDoBtn     = $("schedImportDoBtn");
     const usersListEl   = $("usersList");
+    const usersNoticeEl = $("usersNotice");
+    const userInfoEl    = $("userInfo");
+    const copyPwdBtn    = $("copyPwdBtn");
+    const userResetPwdGroup = $("userResetPwdGroup");
+    const sendResetBtn      = $("sendResetBtn");
+    const userCreatedPanel  = $("userCreatedPanel");
+    const createdEmailEl    = $("createdEmail");
+    const createdPasswordEl = $("createdPassword");
+    const copyCreatedEmailBtn = $("copyCreatedEmailBtn");
+    const copyCreatedPwdBtn   = $("copyCreatedPwdBtn");
+    const createdDoneBtn      = $("createdDoneBtn");
     const mgrQrTabBtn   = $("mgrQrTabBtn");
     const mgrQrTab      = $("mgrQrTab");
     const mgrQrListEl   = $("mgrQrList");
@@ -2393,6 +2486,8 @@
         userPasswordGroup.hidden = true;
         userPasswordInput.required = false;
         userPasswordInput.value = "";
+        // Password cannot be changed client-side — offer the reset e-mail instead
+        userResetPwdGroup.hidden = false;
         userNameInput.value = u.name || "";
         setRolePill(u.role || "cashier");
         // restore actual perms (override defaults)
@@ -2411,43 +2506,123 @@
         userPasswordGroup.hidden = false;
         userPasswordInput.required = true;
         userPasswordInput.value = generatePassword();
+        userResetPwdGroup.hidden = true;
         setRolePill("cashier");
         renderStoreCheckboxes([]);
       }
       renderUserMgrQrs();
+      // Always start on the form, never on a leftover credentials panel
+      showUserForm();
       userModal.classList.add("open");
       setTimeout(() => userEmailInput.focus(), 100);
     }
     function closeUserModal() {
       userModal.classList.remove("open");
       editingUserId = null;
+      showUserForm();
+      // Don't leave credentials sitting in the DOM after the modal closes
+      createdEmailEl.textContent = "";
+      createdPasswordEl.textContent = "";
+    }
+
+    // Toggle between the edit form and the post-create credentials panel
+    function showUserForm() {
+      userForm.hidden = false;
+      userCreatedPanel.hidden = true;
+    }
+    function showCreatedPanel(email, password) {
+      createdEmailEl.textContent = email;
+      createdPasswordEl.textContent = password;
+      userForm.hidden = true;
+      userCreatedPanel.hidden = false;
+    }
+
+    // Clipboard with a fallback for browsers/contexts without the async API
+    async function copyToClipboard(text, btn) {
+      let ok = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          ok = true;
+        }
+      } catch (e) { /* fall through to the legacy path */ }
+      if (!ok) {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+        } catch (e) { ok = false; }
+      }
+      if (btn) {
+        const original = btn.textContent;
+        btn.textContent = ok ? "✅ Αντιγράφηκε" : "❌ Απέτυχε";
+        setTimeout(() => { btn.textContent = original; }, 1500);
+      }
+      if (!ok) showToast("Δεν έγινε αντιγραφή — επίλεξε το κείμενο χειροκίνητα");
+      return ok;
     }
 
     function showUserError(msg) {
       userErrorEl.innerHTML = escapeHtml(msg);
       userErrorEl.classList.add("show");
     }
-    function showResetForExistingEmail(email) {
-      userErrorEl.innerHTML =
-        `Το email <strong>${escapeHtml(email)}</strong> υπάρχει ήδη με <strong>διαφορετικό κωδικό</strong>.<br><br>
-         Πάτα το παρακάτω για να σταλεί email reset link στον χρήστη — μετά που ορίσει νέο κωδικό, ξανα-βάλε εδώ τον ίδιο κωδικό.<br>
-         <button type="button" id="userResetBtn" class="btn btn-primary" style="margin-top:8px;">📧 Στείλε reset link στο ${escapeHtml(email)}</button>`;
-      userErrorEl.classList.add("show");
-      const btn = document.getElementById("userResetBtn");
-      if (btn) btn.addEventListener("click", async () => {
-        btn.disabled = true;
-        btn.textContent = "Αποστολή...";
-        try {
-          await auth.sendPasswordResetEmail(email);
-          userErrorEl.innerHTML = `✅ Στάλθηκε email reset στο <strong>${escapeHtml(email)}</strong>. Όταν ορίσει νέο κωδικό, ξανα-πάτα Αποθήκευση εδώ με τον νέο κωδικό.`;
-        } catch (err) {
-          showUserError("Σφάλμα αποστολής: " + (err.code || err.message));
-        }
-      });
+    function showUserInfo(html) {
+      userInfoEl.innerHTML = html;
+      userInfoEl.classList.add("show");
     }
     function hideUserError() {
       userErrorEl.classList.remove("show");
       userErrorEl.innerHTML = "";
+      userInfoEl.classList.remove("show");
+      userInfoEl.innerHTML = "";
+    }
+
+    // The only password action available without a backend: Firebase's own
+    // "set your password" e-mail. Admin SDK (set another user's password)
+    // is server-side only and this app is client-only by design.
+    async function sendPasswordSetupEmail(email, btn) {
+      if (!email) { showUserError("Δεν βρέθηκε email για αυτόν τον χρήστη."); return; }
+      hideUserError();
+      const original = btn ? btn.textContent : null;
+      if (btn) { btn.disabled = true; btn.textContent = "Αποστολή..."; }
+      try {
+        await auth.sendPasswordResetEmail(email);
+        showUserInfo(
+          `✅ Στάλθηκε e-mail στον/στην <strong>${escapeHtml(email)}</strong>. ` +
+          `Αν δεν φτάσει σε λίγα λεπτά, να ελέγξει τα Ανεπιθύμητα/Spam.`
+        );
+      } catch (err) {
+        console.error("sendPasswordResetEmail failed:", err.code || err.message);
+        const map = {
+          "auth/invalid-email": "Μη έγκυρο email.",
+          "auth/user-not-found": "Δεν υπάρχει λογαριασμός σύνδεσης με αυτό το email.",
+          "auth/too-many-requests": "Πολλές προσπάθειες. Δοκίμασε ξανά σε λίγο.",
+        };
+        showUserError(map[err.code] || ("Σφάλμα αποστολής: " + (err.code || err.message)));
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = original; }
+      }
+    }
+
+    // Create flow hit auth/email-already-in-use with a wrong password.
+    // Explain it plainly and expose the same "set your password" e-mail action.
+    function showResetForExistingEmail(email) {
+      userErrorEl.innerHTML =
+        `Υπάρχει <strong>ήδη λογαριασμός σύνδεσης</strong> με το e-mail
+         <strong>${escapeHtml(email)}</strong>, και ο κωδικός που έβαλες δεν είναι ο σωστός.<br><br>
+         Ο λογαριασμός αυτός δεν διαγράφηκε ποτέ — η διαγραφή από την εφαρμογή σβήνει μόνο την
+         καρτέλα του χρήστη, όχι τον λογαριασμό σύνδεσης.<br><br>
+         Στείλε του e-mail για να ορίσει <strong>νέο κωδικό</strong> (κουμπί πιο πάνω).
+         Μόλις τον ορίσει, γράψε εδώ τον ίδιο κωδικό και πάτα ξανά «Αποθήκευση».`;
+      userErrorEl.classList.add("show");
+      // Reuse the form's button so a failed send doesn't wipe it away
+      userResetPwdGroup.hidden = false;
     }
 
     async function saveUser(formData) {
@@ -2463,7 +2638,8 @@
             storeIds: role === "admin" ? [] : storeIds,
             permissions,
           });
-          showToast("Ο χρήστης ενημερώθηκε");
+          // Be explicit: this saves role/stores/permissions only, never the password
+          showToast("Τα στοιχεία ενημερώθηκαν (ο κωδικός δεν αλλάζει από εδώ)");
           closeUserModal();
         } catch (err) {
           console.error("update user failed:", err);
@@ -2529,8 +2705,9 @@
         return;
       }
       try { await secondaryAuth.signOut(); } catch (e) {}
-      showToast("Ο χρήστης δημιουργήθηκε");
-      closeUserModal();
+      // Last and only chance to see the password — the admin must close this
+      // panel explicitly, so the modal does NOT auto-close here.
+      showCreatedPanel(email, password);
     }
 
     async function deleteUser(uid) {
@@ -2544,11 +2721,30 @@
       )) return;
       try {
         await db.collection("users").doc(uid).delete();
-        showToast("Ο χρήστης διαγράφηκε");
+        showUsersNotice(
+          `Η καρτέλα του/της <strong>${escapeHtml(u.email || "")}</strong> διαγράφηκε. ` +
+          `Ο <strong>λογαριασμός σύνδεσης ΔΕΝ διαγράφηκε</strong> — για πλήρη διαγραφή: ` +
+          `Firebase Console → Authentication → Users.`
+        );
       } catch (err) {
         console.error("deleteUser failed:", err);
         showToast("Σφάλμα: " + (err.code || err.message));
       }
+    }
+
+    // Persistent (dismissible) notice above the users list
+    function showUsersNotice(html) {
+      usersNoticeEl.innerHTML =
+        `<div style="display:flex;gap:8px;align-items:flex-start;">
+           <div style="flex:1;">${html}</div>
+           <button type="button" id="usersNoticeClose" class="icon-btn" aria-label="Κλείσιμο">✕</button>
+         </div>`;
+      usersNoticeEl.classList.add("show");
+      const closeBtn = document.getElementById("usersNoticeClose");
+      if (closeBtn) closeBtn.addEventListener("click", () => {
+        usersNoticeEl.classList.remove("show");
+        usersNoticeEl.innerHTML = "";
+      });
     }
 
     // ── Permission-based UI gating (for non-admin views) ─────────────
@@ -3226,8 +3422,21 @@
     // ── Events: users tab ────────────────────────────────────────────
     addUserBtn.addEventListener("click", () => openUserModal());
     userCancelBtn.addEventListener("click", closeUserModal);
-    userModal.addEventListener("click", (e) => { if (e.target === userModal) closeUserModal(); });
+    userModal.addEventListener("click", (e) => {
+      // While the credentials panel is up, a stray backdrop tap must not
+      // discard the only copy of the password
+      if (!userCreatedPanel.hidden) return;
+      if (e.target === userModal) closeUserModal();
+    });
     genPwdBtn.addEventListener("click", () => { userPasswordInput.value = generatePassword(); });
+    copyPwdBtn.addEventListener("click", () => copyToClipboard(userPasswordInput.value, copyPwdBtn));
+    sendResetBtn.addEventListener("click", () =>
+      sendPasswordSetupEmail(userEmailInput.value.trim(), sendResetBtn));
+    copyCreatedEmailBtn.addEventListener("click", () =>
+      copyToClipboard(createdEmailEl.textContent, copyCreatedEmailBtn));
+    copyCreatedPwdBtn.addEventListener("click", () =>
+      copyToClipboard(createdPasswordEl.textContent, copyCreatedPwdBtn));
+    createdDoneBtn.addEventListener("click", closeUserModal);
     roleGroup.addEventListener("click", (e) => {
       const pill = e.target.closest(".radio-pill");
       if (pill) setRolePill(pill.dataset.role);
@@ -3423,7 +3632,8 @@
         else if (empDetailModal.classList.contains("open")) closeEmployeeDetail();
         else if (importModal.classList.contains("open")) closeImportModal();
         else if (schedImportModal.classList.contains("open")) closeSchedImportModal();
-        else if (userModal.classList.contains("open")) closeUserModal();
+        // Escape must not discard the just-created credentials panel
+        else if (userModal.classList.contains("open")) { if (userCreatedPanel.hidden) closeUserModal(); }
         else if (storeModal.classList.contains("open")) closeStoreModal();
         else if (addModal.classList.contains("open")) closeAddModal();
       }
