@@ -1778,6 +1778,8 @@
         stores.map((s) =>
           `<option value="${s.id}" ${s.id === current ? "selected" : ""}>${escapeHtml(s.name || "")}</option>`
         ).join("");
+      // Belt-and-braces: the options were just replaced, so re-assert the value
+      storeSelector.value = currentStoreId || "";
       // If currentStoreId no longer exists (deleted), reset
       if (current && !stores.find((s) => s.id === current)) {
         setCurrentStore(null);
@@ -1840,6 +1842,12 @@
 
     function setCurrentStore(storeId) {
       currentStoreId = storeId || null;
+      // Single authority for the dropdown label: every caller (card tap, both
+      // auto-select loaders, delete-reset, the change handler) lands here, so
+      // the select can never drift out of sync with currentStoreId.
+      if (storeSelector.value !== (currentStoreId || "")) {
+        storeSelector.value = currentStoreId || "";
+      }
       if (employeesUnsub) { employeesUnsub(); employeesUnsub = null; }
       employees = [];
       // Hide search + scan button when no store is selected
