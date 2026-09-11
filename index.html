@@ -1666,6 +1666,7 @@
               <div class="employee-code">${escapeHtml(e.code || "")}</div>
             </div>
             <button class="icon-btn" data-restore-emp="${e.id}" aria-label="Επαναφορά" title="Επαναφορά">↩️ Επαναφορά</button>
+            <button class="icon-btn danger" data-purge-emp="${e.id}" aria-label="Οριστική διαγραφή" title="Οριστική διαγραφή">🗑️ Οριστική διαγραφή</button>
           </div>
         </div>`).join("");
     }
@@ -2031,6 +2032,40 @@
       } catch (err) {
         console.error("restoreEmployee failed:", err);
         showToast("Σφάλμα κατά την επαναφορά");
+      }
+    }
+
+    // Permanent, irreversible delete of an archived employee (Αρχείο view only).
+    // Unlike deleteEmployee() — which archives — this really removes the doc,
+    // so the same QR code can be scanned fresh afterwards. Type-the-name
+    // confirmation mirrors deleteStore().
+    async function purgeEmployee(id) {
+      if (!currentStoreId) return;
+      const emp = employees.find((e) => e.id === id);
+      if (!emp) return;
+      const name = (emp.name || "").trim();
+      if (!confirm(
+        `ΟΡΙΣΤΙΚΗ διαγραφή του εργαζόμενου «${name || "(χωρίς όνομα)"}»;\n\n` +
+        `Η ενέργεια ΔΕΝ αναιρείται — δεν θα μπορείς να τον επαναφέρεις από το Αρχείο.`
+      )) return;
+      const typed = prompt(
+        `Για επιβεβαίωση, πληκτρολόγησε ακριβώς το όνομα του εργαζόμενου:\n\n${name}`
+      );
+      if (typed === null) return;
+      if ((typed || "").trim() !== name) {
+        showToast("Το όνομα δεν ταιριάζει — η διαγραφή ακυρώθηκε");
+        return;
+      }
+      try {
+        await db.collection("stores").doc(currentStoreId)
+          .collection("employees").doc(id).delete();
+        // Drop locally too so the row disappears without waiting for the snapshot
+        employees = employees.filter((e) => e.id !== id);
+        renderEmployees();
+        showToast("Ο εργαζόμενος διαγράφηκε οριστικά");
+      } catch (err) {
+        console.error("purgeEmployee failed:", err);
+        showToast("Σφάλμα κατά την οριστική διαγραφή");
       }
     }
 
@@ -3587,6 +3622,8 @@
       // Tick buttons: handled by direct listeners attached after each render
       // (Android Chrome was unreliable with event delegation here)
       if (e.target.closest("[data-tick-emp]")) return;
+      const purgeBtn = e.target.closest("[data-purge-emp]");
+      if (purgeBtn) { e.stopPropagation(); purgeEmployee(purgeBtn.dataset.purgeEmp); return; }
       const restoreBtn = e.target.closest("[data-restore-emp]");
       if (restoreBtn) { e.stopPropagation(); restoreEmployee(restoreBtn.dataset.restoreEmp); return; }
       const delBtn = e.target.closest("[data-del-emp]");
