@@ -579,6 +579,19 @@
     }
     .icon-btn:active, .icon-btn:hover { background: #f3f4f6; color: var(--text); }
     .icon-btn.danger:active, .icon-btn.danger:hover { background: #fee2e2; color: var(--danger); }
+    /* Αρχείο rows carry two buttons; never let them squeeze the employee name.
+       Scoped so the shared .icon-btn (active list, Όλοι tab) is untouched. */
+    .icon-btn-archive {
+      flex-shrink: 0;
+      font-size: 1.15rem;
+      padding: 8px;
+      line-height: 1;
+      /* Taller tap target without costing horizontal space (width is what
+         squeezed the name); matters since 🗑️ is an irreversible action. */
+      min-height: 42px;
+      align-items: center;
+      justify-content: center;
+    }
 
     /* ── User card / role badge ──────────────────────────── */
     .user-card {
@@ -1665,8 +1678,8 @@
               <div class="employee-name">${escapeHtml(e.name || "(χωρίς όνομα)")}</div>
               <div class="employee-code">${escapeHtml(e.code || "")}</div>
             </div>
-            <button class="icon-btn" data-restore-emp="${e.id}" aria-label="Επαναφορά" title="Επαναφορά">↩️ Επαναφορά</button>
-            <button class="icon-btn danger" data-purge-emp="${e.id}" aria-label="Οριστική διαγραφή" title="Οριστική διαγραφή">🗑️ Οριστική διαγραφή</button>
+            <button class="icon-btn icon-btn-archive" data-restore-emp="${e.id}" aria-label="Επαναφορά" title="Επαναφορά">↩️</button>
+            <button class="icon-btn icon-btn-archive danger" data-purge-emp="${e.id}" aria-label="Οριστική διαγραφή" title="Οριστική διαγραφή">🗑️</button>
           </div>
         </div>`).join("");
     }
